@@ -135,6 +135,19 @@ func (s *Service) OpenVault(ctx context.Context, password []byte) (*Service, err
 	}), nil
 }
 
+// Close releases an opened vault session when its SecretService supplies a
+// closer. It is safe for services backed by non-owning test doubles and does
+// not make storage lifetime a process-global concern.
+func (s *Service) Close() error {
+	if s == nil || s.secrets == nil {
+		return nil
+	}
+	if closer, ok := s.secrets.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
 func (s *Service) ListSecrets(ctx context.Context, projectID domain.ProjectID) ([]domain.Secret, error) {
 	if err := projectID.Validate(); err != nil {
 		return nil, err
@@ -208,7 +221,7 @@ func (s *Service) Run(ctx context.Context, request domain.ExecutionRequest) (Exe
 			// secret value embedded in its error into an application log leak.
 			return ExecutionResult{}, err
 		}
-		environment = append(environment, EnvironmentEntry{Name: string(material.Name), Value: material.Value})
+		environment = append(environment, EnvironmentEntry{Name: string(name), Value: material.Value})
 	}
 
 	result, err := s.executor.Execute(ctx, request, environment)

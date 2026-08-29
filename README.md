@@ -107,6 +107,16 @@ application screens use presentation-safe boundaries and do not render
 plaintext secret values. No layer shells out to `stty`, `tput`, or another
 external executable.
 
+The [`vault`](vault) package is the production encrypted storage boundary. It
+uses AES-256-GCM with a fresh random salt at initialization, a fresh nonce for
+each save, and the repository's PBKDF2-HMAC-SHA256 implementation. The
+versioned header is authenticated as GCM associated data, while project and
+secret payloads remain encrypted. Updates are written to a same-directory
+unpredictable temporary file, synced, and atomically renamed where supported;
+vault files are created with mode `0600` and newly created parent directories
+with mode `0700`. MayFly minimizes plaintext copies but Go's garbage collector
+does not provide a guarantee of cryptographic memory erasure.
+
 *(Full list with one-line rationale for each goes in `STDLIB.md` — this table is the preview.)*
 
 ## Threat Model

@@ -139,6 +139,7 @@ func TestOpenVaultUsesExplicitStorageBoundary(t *testing.T) {
 	if err != nil || got == nil {
 		t.Fatalf("OpenVault = %v, %v", got, err)
 	}
+	defer got.Close()
 	if _, err := got.ListSecrets(context.Background(), "project-1"); err != nil {
 		t.Fatalf("opened service did not bind secret service: %v", err)
 	}
