@@ -158,7 +158,7 @@ func TestRenderUnicodeAndMultilineText(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := "\x1b[?25l\x1b[1;1H\x1b[2Kπ    \x1b[2;1H\x1b[2K界    \x1b[1;1H"
+	want := "\x1b[?25l\x1b[1;1H\x1b[2Kπ    \x1b[2;1H\x1b[2K界   \x1b[1;1H"
 	if got := output.String(); got != want {
 		t.Fatalf("Unicode multiline render = %q, want %q", got, want)
 	}

@@ -28,9 +28,9 @@ func TestFrameDrawsUnicodeAndMultilineText(t *testing.T) {
 	frame := NewFrame(Size{Rows: 3, Columns: 6})
 	frame.DrawText(0, 1, Style{}, "é界\nGo")
 
-	for column, want := range []rune{' ', 'é', '界', ' ', ' ', ' '} {
+	for column, want := range []rune{' ', 'é', '界', 0, ' ', ' '} {
 		cell, ok := frame.Cell(0, column)
-		if !ok || cell.Rune != want {
+		if !ok || cell.Rune != want || (column == 3 && !cell.Continuation) {
 			t.Fatalf("row 0 column %d = %#v, %v; want %q", column, cell, ok, want)
 		}
 	}

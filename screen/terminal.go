@@ -290,7 +290,19 @@ func (t *Terminal) writeRow(frame *Frame, row, columns int) error {
 
 		var text strings.Builder
 		for index := column; index < end; index++ {
-			text.WriteRune(frame.cells[row][index].Rune)
+			cell := frame.cells[row][index]
+			if cell.Continuation {
+				continue
+			}
+			if RuneWidth(cell.Rune) == 2 && index+1 >= columns {
+				text.WriteRune(' ')
+				continue
+			}
+			if cell.Rune == 0 {
+				text.WriteRune(' ')
+				continue
+			}
+			text.WriteRune(cell.Rune)
 		}
 		if err := t.WriteStyled(style, text.String()); err != nil {
 			return err
