@@ -74,6 +74,39 @@ These are the pieces most projects would just `go get`. We're writing them ourse
 | **CLI argument parsing** | A framework like `cobra` | Go's built-in `flag` package |
 | **Terminal styling/colour** | A package like `chalk` or `fatih/color` | Raw ANSI colour codes, written by hand |
 
+## Architecture
+
+MayFly is split into small layers with explicit dependencies:
+
+```text
+CLI / TUI
+   |
+   v
+application services
+   |-- project lookup
+   |-- vault storage
+   |-- secret operations
+   |-- command execution
+   |-- audit recording
+   `-- optional leak scanner
+   |
+   v
+filesystem / crypto / os/exec / terminal
+```
+
+The [`domain`](domain) package contains validated concepts such as projects,
+secret metadata, execution requests, audit events, and scan findings. It has no
+I/O or terminal behavior. The [`application`](application) package contains
+use-case contracts and orchestration; implementations of storage, encryption,
+process execution, and auditing can be supplied by the CLI or TUI without the
+service layer knowing their internals. Secret values are absent from metadata
+types and are loaded only through explicit value-bearing operations.
+
+The [`screen`](screen) package remains the repository-owned TUI engine. The
+application screens use presentation-safe boundaries and do not render
+plaintext secret values. No layer shells out to `stty`, `tput`, or another
+external executable.
+
 *(Full list with one-line rationale for each goes in `STDLIB.md` — this table is the preview.)*
 
 ## Threat Model

@@ -9,31 +9,23 @@ import (
 	"strings"
 	"unicode"
 
+	"mayfly/application"
 	"mayfly/screen"
 )
 
 // Secret is the vault record consumed by the screen layer. Value is retained
 // only in memory for display masking and vault operations; it is never put in
 // a status message, error text, or rendered frame as plaintext.
-type Secret struct {
-	Name  string
-	Value string
-}
+type Secret = application.ScreenSecret
 
 // Vault is the small storage contract required by the MayFly screens. It is
 // deliberately cryptography-free: a separate vault implementation owns
 // encryption, persistence, and authentication details.
-type Vault interface {
-	Secrets() ([]Secret, error)
-	SetSecret(name, value string) error
-	DeleteSecret(name string) error
-}
+type Vault = application.ScreenVault
 
 // VaultOpener unlocks or opens a vault. The password is passed directly to
 // the vault implementation and is not retained by Screens after the attempt.
-type VaultOpener interface {
-	Unlock(password string) (Vault, error)
-}
+type VaultOpener = application.ScreenVaultOpener
 
 // ScreenMode identifies the currently visible application screen.
 type ScreenMode uint8
