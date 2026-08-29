@@ -138,6 +138,33 @@ go run ./cmd/mayfly init
 Use `-path DIR` for another existing project directory and `-registry FILE`
 when an explicit external metadata location is required.
 
+### Secret management commands
+
+After initializing a project, the application-level CRUD commands are:
+
+```text
+mayfly set <NAME>
+mayfly get <NAME>
+mayfly list
+mayfly delete <NAME>
+```
+
+`set` prompts for the vault password and then the value. On first use, it
+creates the encrypted default vault at `~/.mayfly/vault.enc`; later calls
+unlock that vault. Setting an existing name overwrites it. Names are
+case-sensitive, may contain valid Unicode and spaces, and are limited to 255
+UTF-8 bytes; empty names, control characters, NUL, and `=` are rejected.
+Empty values are allowed. `list` prints names only, `delete` asks for `y`, and
+`get` is the only command that explicitly prints a secret value. Values are
+never printed by status messages, audit events, or errors.
+
+The strict standard-library-only rule means the CLI currently uses visible
+line input for password and secret-value prompts: Go's standard library does
+not provide a portable hidden terminal-input primitive. The TUI's raw input
+layer is separate and is not used by these commands yet. Do not place a
+password or secret in command arguments, logs, or debug output. This visible
+prompt is a documented usability limitation, not a claim of secure display.
+
 *(Full list with one-line rationale for each goes in `STDLIB.md` — this table is the preview.)*
 
 ## Threat Model

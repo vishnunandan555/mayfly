@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"mayfly/domain"
@@ -14,6 +15,8 @@ type fakeSecrets struct {
 	materials map[domain.SecretName]domain.SecretMaterial
 	puts      []domain.SecretInput
 	deletes   []domain.SecretName
+	putErr    error
+	deleteErr error
 }
 
 func (f *fakeSecrets) List(context.Context, domain.ProjectID) ([]domain.Secret, error) {
@@ -27,10 +30,16 @@ func (f *fakeSecrets) Get(_ context.Context, _ domain.ProjectID, name domain.Sec
 	return material, nil
 }
 func (f *fakeSecrets) Put(_ context.Context, input domain.SecretInput) error {
+	if f.putErr != nil {
+		return f.putErr
+	}
 	f.puts = append(f.puts, input)
 	return nil
 }
 func (f *fakeSecrets) Delete(_ context.Context, _ domain.ProjectID, name domain.SecretName) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
 	f.deletes = append(f.deletes, name)
 	return nil
 }
@@ -46,9 +55,15 @@ func (f *fakeExecutor) Execute(_ context.Context, request domain.ExecutionReques
 	return ExecutionResult{ExitCode: 7}, nil
 }
 
-type fakeAudit struct{ events []domain.AuditEvent }
+type fakeAudit struct {
+	events []domain.AuditEvent
+	err    error
+}
 
 func (f *fakeAudit) Record(_ context.Context, event domain.AuditEvent) error {
+	if f.err != nil {
+		return f.err
+	}
 	if err := event.Validate(); err != nil {
 		return err
 	}
@@ -148,5 +163,76 @@ func TestOpenVaultUsesExplicitStorageBoundary(t *testing.T) {
 	}
 	if _, err := NewService(Dependencies{}).OpenVault(context.Background(), nil); !errors.Is(err, ErrMissingVaultStorage) {
 		t.Fatalf("missing vault error = %v", err)
+	}
+}
+
+func TestServiceCurrentSecretCRUDAndAudit(t *testing.T) {
+	project := domain.Project{ID: "project-1", Name: "Demo"}
+	secrets := &fakeSecrets{materials: map[domain.SecretName]domain.SecretMaterial{
+		"TOKEN": {Name: "TOKEN", Value: "value"},
+	}}
+	auditor := &fakeAudit{}
+	service := NewService(Dependencies{
+		Projects: fakeProjects{project: project},
+		Secrets:  secrets,
+		Auditor:  auditor,
+	})
+
+	if err := service.SetCurrentSecret(context.Background(), "TOKEN", "new-value"); err != nil {
+		t.Fatal(err)
+	}
+	if got := secrets.puts; len(got) != 1 || got[0].ProjectID != project.ID || got[0].Name != "TOKEN" || got[0].Value != "new-value" {
+		t.Fatalf("set inputs = %#v", got)
+	}
+
+	material, err := service.GetCurrentSecret(context.Background(), "TOKEN")
+	if err != nil || material.Value != "value" {
+		t.Fatalf("get = %#v, %v", material, err)
+	}
+	if err := service.DeleteCurrentSecret(context.Background(), "TOKEN"); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(secrets.deletes, []domain.SecretName{"TOKEN"}) {
+		t.Fatalf("deletes = %#v", secrets.deletes)
+	}
+	if got := len(auditor.events); got != 3 {
+		t.Fatalf("audit event count = %d, want 3", got)
+	}
+	if auditor.events[0].Action != domain.AuditSecretWritten || auditor.events[1].Action != domain.AuditSecretRead || auditor.events[2].Action != domain.AuditSecretDeleted {
+		t.Fatalf("audit events = %#v", auditor.events)
+	}
+}
+
+func TestServiceAuditFailureIsStableAndDoesNotLeakValue(t *testing.T) {
+	secrets := &fakeSecrets{}
+	service := NewService(Dependencies{
+		Projects: fakeProjects{project: domain.Project{ID: "project-1", Name: "Demo"}},
+		Secrets:  secrets,
+		Auditor:  &fakeAudit{err: errors.New("audit failed: secret-value-must-not-escape")},
+	})
+	if err := service.SetCurrentSecret(context.Background(), "TOKEN", "secret-value-must-not-escape"); !errors.Is(err, ErrAuditFailed) {
+		t.Fatalf("set audit error = %v", err)
+	} else if strings.Contains(err.Error(), "secret-value-must-not-escape") {
+		t.Fatalf("audit error leaked secret: %v", err)
+	}
+	if len(secrets.puts) != 1 {
+		t.Fatalf("successful backend transition was not recorded: %#v", secrets.puts)
+	}
+}
+
+func TestServiceValidatesNamesBeforeSecretBackend(t *testing.T) {
+	secrets := &fakeSecrets{}
+	service := NewService(Dependencies{
+		Projects: fakeProjects{project: domain.Project{ID: "project-1", Name: "Demo"}},
+		Secrets:  secrets,
+	})
+	if err := service.SetCurrentSecret(context.Background(), "bad=name", "value"); !errors.Is(err, ErrInvalidSecretName) {
+		t.Fatalf("invalid name error = %v", err)
+	}
+	if len(secrets.puts) != 0 {
+		t.Fatal("invalid name reached secret backend")
+	}
+	if err := NewService(Dependencies{Secrets: secrets}).SetCurrentSecret(context.Background(), "TOKEN", "value"); !errors.Is(err, ErrMissingProject) {
+		t.Fatalf("missing project error = %v", err)
 	}
 }

@@ -13,10 +13,17 @@ import (
 )
 
 var (
-	ErrMissingVaultStorage = errors.New("application: vault storage is not configured")
-	ErrMissingSecrets      = errors.New("application: secret service is not configured")
-	ErrMissingExecutor     = errors.New("application: command executor is not configured")
-	ErrMissingProject      = errors.New("application: project lookup is not configured")
+	ErrMissingVaultStorage   = errors.New("application: vault storage is not configured")
+	ErrMissingSecrets        = errors.New("application: secret service is not configured")
+	ErrMissingExecutor       = errors.New("application: command executor is not configured")
+	ErrMissingProject        = errors.New("application: project lookup is not configured")
+	ErrProjectNotInitialized = errors.New("application: project is not initialized")
+	ErrVaultMissing          = errors.New("application: vault is missing")
+	ErrWrongPassword         = errors.New("application: wrong password")
+	ErrSecretNotFound        = errors.New("application: secret not found")
+	ErrPersistenceFailed     = errors.New("application: persistence failed")
+	ErrAuditFailed           = errors.New("application: audit failed")
+	ErrInvalidSecretName     = domain.ErrInvalidSecretName
 )
 
 // VaultStorage opens a vault and returns a project-aware secret service. The
@@ -156,7 +163,64 @@ func (s *Service) ListSecrets(ctx context.Context, projectID domain.ProjectID) (
 	if s == nil || s.secrets == nil {
 		return nil, ErrMissingSecrets
 	}
-	return s.secrets.List(ctx, projectID)
+	secrets, err := s.secrets.List(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.audit(ctx, domain.AuditEvent{At: time.Now(), Action: domain.AuditSecretListed, ProjectID: projectID}); err != nil {
+		return nil, err
+	}
+	return secrets, nil
+}
+
+// CurrentProject resolves the project containing the current working
+// directory through the injected project lookup boundary.
+func (s *Service) CurrentProject(ctx context.Context) (domain.Project, error) {
+	if s == nil || s.projects == nil {
+		return domain.Project{}, ErrMissingProject
+	}
+	return s.projects.Current(ctx)
+}
+
+// GetSecret performs an explicit value-bearing read and audits only its safe
+// metadata after the read succeeds. The value is returned only to the caller.
+func (s *Service) GetSecret(ctx context.Context, projectID domain.ProjectID, name domain.SecretName) (domain.SecretMaterial, error) {
+	if err := projectID.Validate(); err != nil {
+		return domain.SecretMaterial{}, err
+	}
+	if err := name.Validate(); err != nil {
+		return domain.SecretMaterial{}, err
+	}
+	if s == nil || s.secrets == nil {
+		return domain.SecretMaterial{}, ErrMissingSecrets
+	}
+	material, err := s.secrets.Get(ctx, projectID, name)
+	if err != nil {
+		return domain.SecretMaterial{}, err
+	}
+	if err := s.audit(ctx, domain.AuditEvent{At: time.Now(), Action: domain.AuditSecretRead, ProjectID: projectID, Secret: name}); err != nil {
+		return domain.SecretMaterial{}, err
+	}
+	return material, nil
+}
+
+// ListCurrentSecrets lists metadata for the initialized current project.
+func (s *Service) ListCurrentSecrets(ctx context.Context) ([]domain.Secret, error) {
+	project, err := s.CurrentProject(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.ListSecrets(ctx, project.ID)
+}
+
+// GetCurrentSecret reads one explicitly requested secret from the current
+// project.
+func (s *Service) GetCurrentSecret(ctx context.Context, name domain.SecretName) (domain.SecretMaterial, error) {
+	project, err := s.CurrentProject(ctx)
+	if err != nil {
+		return domain.SecretMaterial{}, err
+	}
+	return s.GetSecret(ctx, project.ID, name)
 }
 
 // DiscoverProject resolves a path to an initialized project without exposing
@@ -180,13 +244,36 @@ func (s *Service) ListSecretsAt(ctx context.Context, path string) ([]domain.Secr
 }
 
 func (s *Service) SaveSecret(ctx context.Context, input domain.SecretInput) error {
+	if err := input.ProjectID.Validate(); err != nil {
+		return err
+	}
+	if err := input.Name.Validate(); err != nil {
+		return err
+	}
 	if err := input.Validate(); err != nil {
 		return err
 	}
 	if s == nil || s.secrets == nil {
 		return ErrMissingSecrets
 	}
-	return s.secrets.Put(ctx, input)
+	if err := s.secrets.Put(ctx, input); err != nil {
+		return err
+	}
+	return s.audit(ctx, domain.AuditEvent{At: time.Now(), Action: domain.AuditSecretWritten, ProjectID: input.ProjectID, Secret: input.Name})
+}
+
+// SetSecret is the application-level name for the create-or-overwrite
+// operation. SaveSecret remains as a compatibility alias.
+func (s *Service) SetSecret(ctx context.Context, input domain.SecretInput) error {
+	return s.SaveSecret(ctx, input)
+}
+
+func (s *Service) SetCurrentSecret(ctx context.Context, name domain.SecretName, value string) error {
+	project, err := s.CurrentProject(ctx)
+	if err != nil {
+		return err
+	}
+	return s.SetSecret(ctx, domain.SecretInput{ProjectID: project.ID, Name: name, Value: value})
 }
 
 func (s *Service) DeleteSecret(ctx context.Context, projectID domain.ProjectID, name domain.SecretName) error {
@@ -199,7 +286,33 @@ func (s *Service) DeleteSecret(ctx context.Context, projectID domain.ProjectID, 
 	if s == nil || s.secrets == nil {
 		return ErrMissingSecrets
 	}
-	return s.secrets.Delete(ctx, projectID, name)
+	if err := s.secrets.Delete(ctx, projectID, name); err != nil {
+		return err
+	}
+	return s.audit(ctx, domain.AuditEvent{At: time.Now(), Action: domain.AuditSecretDeleted, ProjectID: projectID, Secret: name})
+}
+
+func (s *Service) DeleteCurrentSecret(ctx context.Context, name domain.SecretName) error {
+	project, err := s.CurrentProject(ctx)
+	if err != nil {
+		return err
+	}
+	return s.DeleteSecret(ctx, project.ID, name)
+}
+
+func (s *Service) audit(ctx context.Context, event domain.AuditEvent) error {
+	if s == nil || s.auditor == nil {
+		return nil
+	}
+	if err := event.Validate(); err != nil {
+		return ErrAuditFailed
+	}
+	if err := s.auditor.Record(ctx, event); err != nil {
+		// Do not return an implementation error: a faulty auditor must not
+		// leak a secret value that it may have embedded in its error.
+		return ErrAuditFailed
+	}
+	return nil
 }
 
 // Run resolves selected secrets only in memory, passes them to the executor,
@@ -253,10 +366,13 @@ func (s *Service) Run(ctx context.Context, request domain.ExecutionRequest) (Exe
 			ProjectID: request.ProjectID,
 			Command:   strings.Join(request.Command, " "),
 		})
-		if err == nil {
-			err = auditErr
-		} else if auditErr != nil {
-			err = errors.Join(err, auditErr)
+		if auditErr != nil {
+			auditErr = ErrAuditFailed
+			if err == nil {
+				err = auditErr
+			} else {
+				err = errors.Join(err, auditErr)
+			}
 		}
 	}
 	return result, err

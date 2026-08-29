@@ -37,10 +37,10 @@ const (
 
 var (
 	ErrVaultExists      = errors.New("vault: vault already exists")
-	ErrVaultNotFound    = errors.New("vault: vault does not exist")
+	ErrVaultNotFound    = application.ErrVaultMissing
 	ErrPasswordRequired = errors.New("vault: password is required")
-	ErrWrongPassword    = errors.New("vault: wrong password or corrupt vault")
-	ErrSecretNotFound   = errors.New("vault: secret not found")
+	ErrWrongPassword    = application.ErrWrongPassword
+	ErrSecretNotFound   = application.ErrSecretNotFound
 	ErrProjectNotFound  = errors.New("vault: project not found")
 	ErrVaultClosed      = errors.New("vault: vault is closed")
 	ErrInvalidVaultPath = errors.New("vault: invalid vault path")
@@ -114,7 +114,10 @@ func (s *Storage) Initialize(password []byte) error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(s.path, serialized)
+	if err := writeAtomic(s.path, serialized); err != nil {
+		return persistenceError(err)
+	}
+	return nil
 }
 
 // Open unlocks and loads the vault as an application SecretService. The
@@ -460,7 +463,17 @@ func (v *Vault) saveProjectsLocked(projects map[domain.ProjectID]diskProject) er
 	if err != nil {
 		return err
 	}
-	return writeAtomic(v.path, data)
+	if err := writeAtomic(v.path, data); err != nil {
+		return persistenceError(err)
+	}
+	return nil
+}
+
+func persistenceError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%w: %v", application.ErrPersistenceFailed, err)
 }
 
 type diskPayload struct {

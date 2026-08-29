@@ -11,12 +11,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"mayfly/application"
 	"mayfly/domain"
 )
 
 var (
 	ErrProjectPath           = errors.New("project: invalid project path")
-	ErrProjectNotInitialized = errors.New("project: project is not initialized")
+	ErrProjectNotInitialized = application.ErrProjectNotInitialized
 	ErrRegistryInsideProject = errors.New("project: registry must be outside the project")
 	ErrInvalidRegistry       = errors.New("project: invalid registry")
 )
