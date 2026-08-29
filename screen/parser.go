@@ -92,6 +92,8 @@ func parseText(data []byte, flush bool) (Event, int, bool) {
 		return Event{Type: EventCtrlD}, 1, true
 	case 0x15:
 		return Event{Type: EventCtrlU}, 1, true
+	case 0x17:
+		return Event{Type: EventCtrlW}, 1, true
 	}
 
 	runeValue, size := utf8.DecodeRune(data)
@@ -176,6 +178,12 @@ func parseCSI(params []byte, final byte) Event {
 	case '~':
 		if bytes.Equal(params, []byte("1")) || bytes.Equal(params, []byte("7")) {
 			return Event{Type: EventHome}
+		}
+		if bytes.Equal(params, []byte("5")) {
+			return Event{Type: EventPageUp}
+		}
+		if bytes.Equal(params, []byte("6")) {
+			return Event{Type: EventPageDown}
 		}
 		if bytes.Equal(params, []byte("3")) {
 			return Event{Type: EventDelete}

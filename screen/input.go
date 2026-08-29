@@ -32,6 +32,9 @@ const (
 	EventCtrlC
 	EventCtrlD
 	EventCtrlU
+	EventCtrlW
+	EventPageUp
+	EventPageDown
 )
 
 // Event is one keyboard event. Rune is populated for EventRune. Bytes is
