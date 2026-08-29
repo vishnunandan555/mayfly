@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 )
 
@@ -35,8 +36,9 @@ func (s Size) normalized() Size {
 	return s
 }
 
-// Color is an ANSI SGR foreground color. ColorDefault means that no color is
-// emitted for that part of a style.
+// Color is an ANSI SGR color. ColorDefault means that no color is emitted for
+// that part of a style. Bright colors are available when the configured color
+// mode supports them.
 type Color int
 
 const (
@@ -49,21 +51,57 @@ const (
 	ColorMagenta
 	ColorCyan
 	ColorWhite
+	ColorBrightBlack
+	ColorBrightRed
+	ColorBrightGreen
+	ColorBrightYellow
+	ColorBrightBlue
+	ColorBrightMagenta
+	ColorBrightCyan
+	ColorBrightWhite
 )
 
-// Attributes is a set of ANSI SGR text attributes.
-type Attributes uint16
+// ColorMode controls the color capability used by a Terminal.
+type ColorMode uint8
 
 const (
-	AttrNone          Attributes = 0
-	AttrBold          Attributes = 1 << 0
-	AttrDim           Attributes = 1 << 1
-	AttrItalic        Attributes = 1 << 2
-	AttrUnderline     Attributes = 1 << 3
-	AttrBlink         Attributes = 1 << 4
-	AttrReverse       Attributes = 1 << 5
-	AttrHidden        Attributes = 1 << 6
-	AttrStrikethrough Attributes = 1 << 7
+	// ColorModeNone emits no foreground or background colors.
+	ColorModeNone ColorMode = iota
+	// ColorModeANSI emits the eight ANSI basic colors.
+	ColorModeANSI
+	// ColorModeBright emits basic and bright ANSI colors.
+	ColorModeBright
+)
+
+// StyleConfig controls terminal styling. DisableStyling suppresses all SGR
+// sequences, including bold and underline. ColorModeNone suppresses colors but
+// still permits non-color attributes. HonorNoColor makes a non-empty NO_COLOR
+// environment variable suppress colors.
+type StyleConfig struct {
+	ColorMode      ColorMode
+	DisableStyling bool
+	HonorNoColor   bool
+}
+
+// DefaultStyleConfig returns conservative ANSI styling configuration. It
+// honors the NO_COLOR convention by disabling foreground/background colors.
+func DefaultStyleConfig() StyleConfig {
+	return StyleConfig{
+		ColorMode:    ColorModeBright,
+		HonorNoColor: true,
+	}
+}
+
+// Attributes is a set of the small collection of SGR text attributes used by
+// MayFly.
+type Attributes uint8
+
+const (
+	AttrNone      Attributes = 0
+	AttrBold      Attributes = 1 << 0
+	AttrDim       Attributes = 1 << 1
+	AttrUnderline Attributes = 1 << 2
+	AttrReverse   Attributes = 1 << 3
 )
 
 // Style describes the appearance of text in a frame.
@@ -78,26 +116,74 @@ func (s Style) IsZero() bool {
 	return s.Foreground == ColorDefault && s.Background == ColorDefault && s.Attributes == AttrNone
 }
 
-// SGR returns the ANSI Select Graphic Rendition sequence for the style. It
-// returns an empty string for the zero style.
+// SGR returns the ANSI Select Graphic Rendition sequence for the style using
+// bright-color support. It returns an empty string for the zero style.
 func (s Style) SGR() string {
+	return s.Sequence(StyleConfig{ColorMode: ColorModeBright})
+}
+
+// Sequence returns the style's SGR sequence under config. It returns an empty
+// string when styling is disabled or the style has no enabled components.
+func (s Style) Sequence(config StyleConfig) string {
+	config = config.resolved()
+	if config.DisableStyling {
+		return ""
+	}
 	if s.IsZero() {
 		return ""
 	}
 
-	params := make([]string, 0, 10)
-	for bit, code := range []int{1, 2, 3, 4, 5, 7, 8, 9} {
+	params := make([]string, 0, 6)
+	for bit, code := range []int{1, 2, 4, 7} {
 		if s.Attributes&(1<<bit) != 0 {
 			params = append(params, fmt.Sprintf("%d", code))
 		}
 	}
-	if s.Foreground != ColorDefault {
-		params = append(params, fmt.Sprintf("%d", int(s.Foreground)+29))
+	if colorCode, ok := foregroundCode(s.Foreground, config); ok {
+		params = append(params, fmt.Sprintf("%d", colorCode))
 	}
-	if s.Background != ColorDefault {
-		params = append(params, fmt.Sprintf("%d", int(s.Background)+39))
+	if colorCode, ok := backgroundCode(s.Background, config); ok {
+		params = append(params, fmt.Sprintf("%d", colorCode))
+	}
+	if len(params) == 0 {
+		return ""
 	}
 	return escape + strings.Join(params, ";") + "m"
+}
+
+func foregroundCode(color Color, config StyleConfig) (int, bool) {
+	if color == ColorDefault || config.ColorMode == ColorModeNone {
+		return 0, false
+	}
+	if color >= ColorBrightBlack {
+		if config.ColorMode != ColorModeBright {
+			color -= ColorBrightBlack - ColorBlack
+			return int(color) + 29, true
+		}
+		return int(color) + 81, true
+	}
+	return int(color) + 29, true
+}
+
+func (config StyleConfig) resolved() StyleConfig {
+	if config.ColorMode > ColorModeBright {
+		config.ColorMode = ColorModeANSI
+	}
+	if config.HonorNoColor && os.Getenv("NO_COLOR") != "" {
+		config.ColorMode = ColorModeNone
+	}
+	return config
+}
+
+func backgroundCode(color Color, config StyleConfig) (int, bool) {
+	code, ok := foregroundCode(color, config)
+	if !ok {
+		return 0, false
+	}
+	if code >= 90 {
+		return code + 10, true
+	}
+	return code + 10, true
 }
 
 // Terminal writes ANSI control sequences and rendered frames to an injected
@@ -106,6 +192,7 @@ type Terminal struct {
 	out           *bufio.Writer
 	viewport      Size
 	previousFrame Size
+	styleConfig   StyleConfig
 }
 
 // NewTerminal creates a buffered terminal writer with an explicit viewport.
@@ -113,10 +200,26 @@ type Terminal struct {
 // assumes a conventional terminal size nor invokes an external command to
 // discover one.
 func NewTerminal(w io.Writer, viewport Size) *Terminal {
+	return NewTerminalWithConfig(w, viewport, DefaultStyleConfig())
+}
+
+// NewTerminalWithConfig creates a buffered terminal writer with explicit
+// viewport and styling capability configuration.
+func NewTerminalWithConfig(w io.Writer, viewport Size, config StyleConfig) *Terminal {
 	if w == nil {
 		w = io.Discard
 	}
-	return &Terminal{out: bufio.NewWriter(w), viewport: viewport.normalized()}
+	return &Terminal{out: bufio.NewWriter(w), viewport: viewport.normalized(), styleConfig: config.resolved()}
+}
+
+// StyleConfig returns the effective styling configuration.
+func (t *Terminal) StyleConfig() StyleConfig {
+	return t.styleConfig
+}
+
+// SetStyleConfig changes styling behavior for subsequent writes.
+func (t *Terminal) SetStyleConfig(config StyleConfig) {
+	t.styleConfig = config.resolved()
 }
 
 // Viewport returns the terminal size used for clipping rendered frames.
@@ -209,10 +312,11 @@ func (t *Terminal) WriteStyled(style Style, text string) error {
 	if text == "" {
 		return nil
 	}
-	if style.IsZero() {
+	sequence := style.Sequence(t.styleConfig)
+	if sequence == "" {
 		return t.write(text)
 	}
-	return t.write(style.SGR() + text + csi("0m"))
+	return t.write(sequence + text + csi("0m"))
 }
 
 // Render draws the frame's intersection with the terminal viewport. Each

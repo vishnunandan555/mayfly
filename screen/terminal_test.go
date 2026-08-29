@@ -8,7 +8,7 @@ import (
 
 func newTestTerminal(viewport Size) (*Terminal, *bytes.Buffer) {
 	var output bytes.Buffer
-	return NewTerminal(&output, viewport), &output
+	return NewTerminalWithConfig(&output, viewport, StyleConfig{ColorMode: ColorModeBright}), &output
 }
 
 func TestControlSequences(t *testing.T) {
