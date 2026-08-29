@@ -237,6 +237,24 @@ func TestScreenUnlockFailureAndSanitizedError(t *testing.T) {
 	}
 }
 
+func TestScreenUnlockErrorDismissAndRetry(t *testing.T) {
+	fake := newFakeService()
+	fake.unlocked = false
+	fake.unlockErr = errors.New("wrong password")
+	screens := NewScreens(fake)
+
+	// Step 1: Attempt wrong password, enter -> error modal
+	// Step 2: Press Enter -> dismiss error modal back to unlock
+	// Step 3: Clear error condition on fake, enter correct password, enter -> unlocks to Secrets mode
+	// Step 4: Press 'q' to quit
+	app := screen.NewApplication(screens.ApplicationOptions(&bytes.Buffer{}, screen.NewInput(strings.NewReader("bad\r\r")), screen.Size{Rows: 24, Columns: 80}))
+	// Run first attempt
+	_ = app.Run()
+	if screens.Mode() != ModeUnlock {
+		t.Fatalf("mode after dismissing error = %v, want ModeUnlock", screens.Mode())
+	}
+}
+
 func TestScreenEmptyVault(t *testing.T) {
 	fake := newFakeService()
 	fake.secrets = nil

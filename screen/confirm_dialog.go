@@ -58,20 +58,38 @@ func (d *ConfirmDialog) Handle(event Event) bool {
 	}
 	switch event.Type {
 	case EventArrowLeft, EventArrowUp:
-		d.YesSelected = true
+		if d.NoLabel != "" {
+			d.YesSelected = true
+		}
 	case EventArrowRight, EventArrowDown:
-		d.YesSelected = false
+		if d.NoLabel != "" {
+			d.YesSelected = false
+		}
 	case EventRune:
+		if event.Rune == ' ' {
+			if d.YesSelected || d.NoLabel == "" {
+				d.Result = DialogYes
+			} else {
+				d.Result = DialogNo
+			}
+			return true
+		}
 		switch event.Rune {
 		case 'y', 'Y':
 			d.YesSelected = true
 		case 'n', 'N':
-			d.YesSelected = false
+			if d.NoLabel != "" {
+				d.YesSelected = false
+			}
 		default:
+			if d.NoLabel == "" {
+				d.Result = DialogYes
+				return true
+			}
 			return false
 		}
 	case EventEnter:
-		if d.YesSelected {
+		if d.YesSelected || d.NoLabel == "" {
 			d.Result = DialogYes
 		} else {
 			d.Result = DialogNo
@@ -120,11 +138,16 @@ func (d *ConfirmDialog) Render(frame *Frame) {
 		return
 	}
 	buttonRow := inner.Max.Row - 1
-	buttons := "[ " + d.YesLabel + " ]   [ " + d.NoLabel + " ]"
+	var buttons string
+	if d.NoLabel != "" {
+		buttons = "[ " + d.YesLabel + " ]   [ " + d.NoLabel + " ]"
+	} else {
+		buttons = "[ " + d.YesLabel + " ]"
+	}
 	frame.DrawTextIn(NewRect(buttonRow, inner.Min.Column, 1, inner.Size().Columns), buttons, TextOptions{Horizontal: AlignCenter})
 	// Repaint the selected button with its style. This deliberately uses fixed
 	// label positions, keeping selection behavior deterministic.
-	if d.YesSelected {
+	if d.YesSelected || d.NoLabel == "" {
 		start := inner.Min.Column + (inner.Size().Columns-TextWidth(buttons))/2 + 2
 		frame.DrawText(buttonRow, start, d.SelectedStyle, d.YesLabel)
 	} else {

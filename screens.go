@@ -616,6 +616,14 @@ func (s *Screens) handleGlobal(app *screen.Application, event screen.Event) bool
 			return true
 		}
 	case ModeError:
+		if event.Type == screen.EventEnter || event.Type == screen.EventEscape || event.Type == screen.EventCtrlD {
+			s.dismissError()
+			return true
+		}
+		if event.Type == screen.EventRune && (event.Rune == ' ' || event.Rune == 'q' || event.Rune == 'Q' || event.Rune == 'y' || event.Rune == 'Y' || event.Rune == 'n' || event.Rune == 'N') {
+			s.dismissError()
+			return true
+		}
 		if s.errorBox.Handle(event) {
 			if s.errorBox.Result != screen.DialogPending {
 				s.dismissError()
@@ -630,16 +638,16 @@ func (s *Screens) unlock() {
 	password := s.password.Value()
 	s.password.SetValue("")
 	if s.service == nil {
-		s.showError(nil, ModeUnlock, "Unable to unlock vault")
+		s.showError(s.app, ModeUnlock, "Unable to unlock vault")
 		return
 	}
 	if err := s.service.Unlock(context.Background(), password); err != nil {
-		s.showError(nil, ModeUnlock, "Unable to unlock vault")
+		s.showError(s.app, ModeUnlock, "Unable to unlock vault")
 		return
 	}
 	s.loadProjectInfo()
 	if !s.reloadSecrets() {
-		s.showError(nil, ModeUnlock, "Unable to load secrets")
+		s.showError(s.app, ModeUnlock, "Unable to load secrets")
 		return
 	}
 	s.status = "Vault unlocked"
@@ -799,6 +807,9 @@ func (s *Screens) openAudit() {
 }
 
 func (s *Screens) showError(app *screen.Application, returnMode ScreenMode, message string) {
+	if app == nil {
+		app = s.app
+	}
 	s.returnMode = returnMode
 	s.errorBox.Message = message
 	s.errorBox.Reset()
