@@ -1,9 +1,11 @@
 // Package screen provides MayFly's terminal UI output and input foundation.
 // Input decoding is explicit, and raw terminal mode is entered only when
-// NewRawInput or RunRaw is called. Raw mode currently targets Linux termios;
-// unsupported operating systems return ErrRawModeUnsupported. The parser
-// targets common ANSI/VT-compatible terminals rather than every terminal
-// protocol.
+// NewRawInput or RunRaw is called. Raw mode and terminal-size discovery
+// currently target Linux TTYs through Linux termios/ioctl interfaces;
+// unsupported operating systems return the relevant unsupported error. The
+// renderer targets ANSI/VT-compatible terminals supporting CSI cursor/clear
+// operations, SGR styling, and cursor visibility. It does not enter the
+// alternate screen and does not claim universal terminal compatibility.
 package screen
 
 import (
@@ -12,6 +14,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode"
 )
 
 const escape = "\x1b["
@@ -309,10 +312,13 @@ func (t *Terminal) Reset() error {
 	return t.write(csi("0m") + csi("?25h"))
 }
 
-// WriteStyled writes text wrapped in the style's SGR sequence and a reset.
-// Text is written as supplied. Frame rendering is the safe bounded API for
-// arbitrary UI text because it emits only printable cell contents.
+// WriteStyled writes printable text wrapped in the style's SGR sequence and
+// a reset. Terminal control characters in text are replaced with spaces, so
+// user-provided strings cannot inject cursor movement, OSC, or CSI sequences.
+// Explicit terminal operations remain available through the control methods
+// on Terminal.
 func (t *Terminal) WriteStyled(style Style, text string) error {
+	text = sanitizeTerminalText(text)
 	if text == "" {
 		return nil
 	}
@@ -342,20 +348,11 @@ func (t *Terminal) Render(frame *Frame) error {
 	visible = visible.normalized()
 
 	if visible.Rows == 0 || visible.Columns == 0 {
-		rowsToClear := t.previousFrame.Rows
-		if t.viewport.Rows < rowsToClear {
-			rowsToClear = t.viewport.Rows
-		}
-		for row := 0; row < rowsToClear; row++ {
-			if err := t.MoveCursor(row, 0); err != nil {
-				return err
-			}
-			if err := t.ClearLine(); err != nil {
-				return err
-			}
-		}
-		if rowsToClear > 0 {
-			if err := t.MoveCursor(0, 0); err != nil {
+		if t.previousFrame.Rows > 0 && t.previousFrame.Columns > 0 {
+			// There is no safe row/column in a zero-sized viewport from which to
+			// clear the old full-screen frame. Clear and home are bounded control
+			// operations and leave the cursor at the logical origin.
+			if err := t.ClearScreen(); err != nil {
 				return err
 			}
 		}
@@ -422,4 +419,16 @@ func (t *Terminal) writeRow(frame *Frame, row, columns int) error {
 		column = end
 	}
 	return nil
+}
+
+func sanitizeTerminalText(text string) string {
+	var sanitized strings.Builder
+	for _, runeValue := range text {
+		if unicode.IsControl(runeValue) {
+			sanitized.WriteRune(' ')
+			continue
+		}
+		sanitized.WriteRune(runeValue)
+	}
+	return sanitized.String()
 }

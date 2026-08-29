@@ -41,6 +41,13 @@ func enterRawMode(file *os.File) (func() error, error) {
 	}, nil
 }
 
+func (r *rawFileReader) Read(buffer []byte) (int, error) {
+	if r == nil || r.file == nil {
+		return 0, ErrInputClosed
+	}
+	return syscall.Read(int(r.file.Fd()), buffer)
+}
+
 func ioctlTermios(fd uintptr, request uintptr, termios *syscall.Termios) error {
 	_, _, errno := syscall.Syscall6(syscall.SYS_IOCTL, fd, request, uintptr(unsafe.Pointer(termios)), 0, 0, 0)
 	if errno != 0 {

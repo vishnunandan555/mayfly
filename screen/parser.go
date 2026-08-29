@@ -30,8 +30,17 @@ func (p *Parser) Pending() bool {
 // Feed adds bytes and returns every event that can be decoded without waiting
 // for more bytes.
 func (p *Parser) Feed(data []byte) []Event {
-	p.pending = append(p.pending, data...)
-	return p.parse(false)
+	var events []Event
+	for len(data) > 0 {
+		chunkSize := len(data)
+		if chunkSize > maxPendingInput {
+			chunkSize = maxPendingInput
+		}
+		p.pending = append(p.pending, data[:chunkSize]...)
+		events = append(events, p.parse(false)...)
+		data = data[chunkSize:]
+	}
+	return events
 }
 
 // Flush resolves incomplete input. A lone Escape becomes EventEscape; an
@@ -53,7 +62,7 @@ func (p *Parser) parse(flush bool) []Event {
 			}
 			if !flush {
 				if len(p.pending) > maxPendingInput {
-					events = append(events, Event{Type: EventUnknown, Bytes: cloneBytes(p.pending)})
+					events = append(events, Event{Type: EventUnknown, Bytes: cloneBytes(p.pending[:maxPendingInput])})
 					p.pending = nil
 				}
 				break
@@ -134,6 +143,9 @@ func parseEscape(data []byte) (Event, int, bool) {
 			continue
 		}
 		event := parseCSI(data[2:index], data[index])
+		if index+1 > maxPendingInput {
+			return Event{Type: EventUnknown, Bytes: cloneBytes(data[:index+1])}, index + 1, true
+		}
 		if event.Type == EventUnknown {
 			return Event{Type: EventUnknown, Bytes: cloneBytes(data[:index+1])}, index + 1, true
 		}
@@ -162,6 +174,9 @@ func parseVTFunction(final byte) Event {
 }
 
 func parseCSI(params []byte, final byte) Event {
+	if !validCSIParams(params) {
+		return Event{Type: EventUnknown}
+	}
 	switch final {
 	case 'A':
 		return Event{Type: EventArrowUp}
@@ -197,6 +212,18 @@ func parseCSI(params []byte, final byte) Event {
 	return Event{Type: EventUnknown}
 }
 
+func validCSIParams(params []byte) bool {
+	for _, value := range params {
+		if (value < '0' || value > '9') && value != ';' && value != '?' && value != '>' {
+			return false
+		}
+	}
+	return true
+}
+
 func cloneBytes(data []byte) []byte {
+	if len(data) > maxPendingInput {
+		data = data[:maxPendingInput]
+	}
 	return append([]byte(nil), data...)
 }

@@ -191,25 +191,34 @@ func (a *Application) Run() (err error) {
 	return nil
 }
 
-// RunTerminal discovers the terminal size, enters raw mode, runs an
-// Application, and restores the original terminal state on every return path.
+// RunTerminalIO discovers the terminal size from inputFile, enters raw mode
+// on that file, renders to output, and restores the original terminal state on
+// every return path. Separating input and output supports ordinary shells
+// where stdin is read-only and stdout is write-only.
+//
 // It is Linux-only in this zero-dependency implementation because raw mode
 // and resize ioctls are platform-specific; unsupported builds return the
 // relevant error without invoking the application.
-func RunTerminal(file *os.File, options ApplicationOptions) error {
-	size, err := TerminalSize(file)
+func RunTerminalIO(inputFile *os.File, output io.Writer, options ApplicationOptions) error {
+	size, err := TerminalSize(inputFile)
 	if err != nil {
 		return err
 	}
-	return RunRaw(file, func(input Input) error {
-		options.Output = file
+	return RunRaw(inputFile, func(input Input) error {
+		options.Output = output
 		options.Input = input
 		options.Size = size
 		if options.SizeProvider == nil {
-			options.SizeProvider = func() (Size, error) { return TerminalSize(file) }
+			options.SizeProvider = func() (Size, error) { return TerminalSize(inputFile) }
 		}
 		return NewApplication(options).Run()
 	})
+}
+
+// RunTerminal is the convenience form for a read-write terminal file. Use
+// RunTerminalIO when input and output are separate descriptors.
+func RunTerminal(file *os.File, options ApplicationOptions) error {
+	return RunTerminalIO(file, file, options)
 }
 
 // Run is a convenience entry point for a full-screen application using the
@@ -380,7 +389,15 @@ func (a *Application) cleanup() error {
 	if a.terminal == nil {
 		return nil
 	}
-	return errors.Join(a.terminal.Reset(), a.terminal.Flush())
+	// MayFly does not use the alternate screen, so remove the frame it owns
+	// before returning control to the shell. Keep running the remaining cleanup
+	// steps if one write fails: attributes must be reset and the cursor shown
+	// even when clearing or flushing reports an error.
+	return errors.Join(
+		a.terminal.ClearScreen(),
+		a.terminal.Reset(),
+		a.terminal.Flush(),
+	)
 }
 
 func (a *Application) pollResize(events <-chan os.Signal) (bool, error) {

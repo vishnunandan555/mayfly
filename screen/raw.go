@@ -18,9 +18,15 @@ type RawInput struct {
 	input   *InputReader
 	restore func() error
 
-	mu     sync.Mutex
-	closed bool
+	mu       sync.Mutex
+	closed   bool
+	closeErr error
 }
+
+// rawFileReader bypasses os.File.Read's zero-byte-to-EOF normalization. With
+// Linux VMIN=0/VTIME>0, the kernel uses (0, nil) to report a polling timeout;
+// preserving that result is required to keep an idle TUI alive.
+type rawFileReader struct{ file *os.File }
 
 // NewRawInput switches file to noncanonical, no-echo mode and returns an input
 // source. The operation is explicit and has no package initialization side
@@ -30,13 +36,16 @@ func NewRawInput(file *os.File) (*RawInput, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &RawInput{input: NewInput(file), restore: restore}, nil
+	return &RawInput{input: NewInput(&rawFileReader{file: file}), restore: restore}, nil
 }
 
 // ReadEvent reads the next event. A normal polling timeout is returned to the
 // caller without changing terminal state; any other source error triggers
 // restoration before the error is returned.
 func (r *RawInput) ReadEvent() (Event, error) {
+	if r == nil {
+		return Event{}, ErrInputClosed
+	}
 	r.mu.Lock()
 	closed := r.closed
 	r.mu.Unlock()
@@ -61,13 +70,20 @@ func (r *RawInput) ReadEvent() (Event, error) {
 // Close restores the exact terminal state captured by NewRawInput. It is
 // idempotent and does not close the caller's file descriptor.
 func (r *RawInput) Close() error {
+	if r == nil {
+		return nil
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {
-		return nil
+		return r.closeErr
 	}
 	r.closed = true
-	return r.restore()
+	if r.restore == nil {
+		return nil
+	}
+	r.closeErr = r.restore()
+	return r.closeErr
 }
 
 // RunRaw establishes raw mode, invokes fn, and restores terminal state on all
@@ -85,14 +101,21 @@ func RunRaw(file *os.File, fn func(Input) error) (err error) {
 
 	signals := make(chan os.Signal, 1)
 	done := make(chan struct{})
+	finished := make(chan struct{})
 	watchedSignals := append([]os.Signal{os.Interrupt}, additionalRawSignals()...)
 	signal.Notify(signals, watchedSignals...)
 	defer func() {
 		signal.Stop(signals)
 		close(done)
+		<-finished
 		err = errors.Join(err, input.Close())
 	}()
+	// This is the only goroutine created by RunRaw. It waits for a process
+	// signal or the done channel; the deferred cleanup stops signal delivery,
+	// closes done, waits for the goroutine to finish, and idempotently restores
+	// the saved terminal state.
 	go func() {
+		defer close(finished)
 		select {
 		case <-signals:
 			_ = input.Close()

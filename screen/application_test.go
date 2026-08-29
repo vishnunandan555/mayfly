@@ -83,8 +83,8 @@ func TestApplicationHarnessDispatchesInputAndRendersChanges(t *testing.T) {
 	if renders := strings.Count(output.String(), "\x1b[?25l"); renders < 6 {
 		t.Fatalf("render count = %d, want initial plus state changes", renders)
 	}
-	if !strings.Contains(output.String(), "\x1b[0m\x1b[?25h") {
-		t.Fatal("cleanup did not reset attributes and show cursor")
+	if !strings.Contains(output.String(), "\x1b[2J\x1b[H\x1b[0m\x1b[?25h") {
+		t.Fatal("cleanup did not clear the screen, reset attributes, and show cursor")
 	}
 }
 
@@ -199,7 +199,7 @@ func TestApplicationCleanupOnInputError(t *testing.T) {
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Run error = %v, want input error", err)
 	}
-	if !strings.HasSuffix(output.String(), "\x1b[0m\x1b[?25h") {
+	if !strings.HasSuffix(output.String(), "\x1b[2J\x1b[H\x1b[0m\x1b[?25h") {
 		t.Fatalf("cleanup output suffix = %q", output.String()[max(0, len(output.String())-20):])
 	}
 }
@@ -210,7 +210,7 @@ func TestApplicationNilInputStillCleansOutput(t *testing.T) {
 	if err := app.Run(); err == nil {
 		t.Fatal("Run with nil input returned nil")
 	}
-	if !strings.HasSuffix(output.String(), "\x1b[0m\x1b[?25h") {
+	if !strings.HasSuffix(output.String(), "\x1b[2J\x1b[H\x1b[0m\x1b[?25h") {
 		t.Fatal("nil-input path did not flush cleanup")
 	}
 }
@@ -241,5 +241,34 @@ func TestApplicationEOFIsCleanExit(t *testing.T) {
 	}
 	if app.ExitReason() != ExitEOF {
 		t.Fatalf("exit reason = %v, want EOF", app.ExitReason())
+	}
+}
+
+type panicRenderWidget struct{ WidgetState }
+
+func (*panicRenderWidget) Focusable() bool   { return false }
+func (*panicRenderWidget) Handle(Event) bool { return false }
+func (*panicRenderWidget) Render(*Frame)     { panic("render panic") }
+
+func TestApplicationCleanupRunsWhenWidgetPanics(t *testing.T) {
+	var output bytes.Buffer
+	app := NewApplication(ApplicationOptions{
+		Output: &output, Input: NewInput(strings.NewReader("")),
+		Size: Size{Rows: 2, Columns: 8}, Widgets: []Widget{&panicRenderWidget{}},
+	})
+	panicked := false
+	func() {
+		defer func() {
+			if recover() != nil {
+				panicked = true
+			}
+		}()
+		_ = app.Run()
+	}()
+	if !panicked {
+		t.Fatal("widget panic was not propagated")
+	}
+	if !strings.HasSuffix(output.String(), "\x1b[2J\x1b[H\x1b[0m\x1b[?25h") {
+		t.Fatalf("panic cleanup suffix = %q", output.String())
 	}
 }

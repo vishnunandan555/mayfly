@@ -100,6 +100,33 @@ func TestParserHandlesRepeatedSequences(t *testing.T) {
 	}
 }
 
+func TestParserBoundsLongMalformedEscapePayload(t *testing.T) {
+	parser := NewParser()
+	data := append([]byte{0x1b, '['}, bytes.Repeat([]byte{'0'}, maxPendingInput*20)...)
+	events := parser.Feed(data)
+	events = append(events, parser.Flush()...)
+	if len(events) == 0 || events[0].Type != EventUnknown {
+		t.Fatalf("long malformed sequence events = %#v", events)
+	}
+	if len(events[0].Bytes) > maxPendingInput {
+		t.Fatalf("unknown escape payload length = %d, want <= %d", len(events[0].Bytes), maxPendingInput)
+	}
+
+	longWithFinal := append([]byte{0x1b, '['}, bytes.Repeat([]byte{'1'}, maxPendingInput*20)...)
+	longWithFinal = append(longWithFinal, 'A')
+	events = parseAll(longWithFinal)
+	if len(events) == 0 || events[0].Type != EventUnknown || len(events[0].Bytes) > maxPendingInput {
+		t.Fatalf("long final escape events = %#v", events)
+	}
+}
+
+func TestParserRejectsInvalidCSIParameterBytes(t *testing.T) {
+	want := []Event{{Type: EventUnknown, Bytes: []byte{0x1b, '[', ':', 'A'}}}
+	if got := parseAll([]byte{0x1b, '[', ':', 'A'}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("invalid CSI events = %#v, want %#v", got, want)
+	}
+}
+
 func TestParserDecodesShiftTabAndPageSequences(t *testing.T) {
 	want := []Event{{Type: EventShiftTab}, {Type: EventPageUp}, {Type: EventPageDown}}
 	if got := parseAll([]byte("\x1b[Z\x1b[5~\x1b[6~")); !reflect.DeepEqual(got, want) {

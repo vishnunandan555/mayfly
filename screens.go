@@ -185,6 +185,17 @@ func (s *Screens) Run(file *os.File) error {
 	return screen.RunTerminal(file, s.ApplicationOptions(nil, nil, screen.Size{}))
 }
 
+// RunIO starts the screens with separate input and output streams. This is
+// the preferred form for normal terminal processes: input is usually
+// os.Stdin and output is usually os.Stdout.
+func (s *Screens) RunIO(input *os.File, output io.Writer) error {
+	if s == nil {
+		return screen.RunTerminalIO(input, output, screen.ApplicationOptions{})
+	}
+	defer s.clearSensitiveInputs()
+	return screen.RunTerminalIO(input, output, s.ApplicationOptions(nil, nil, screen.Size{}))
+}
+
 type screenView struct {
 	screen.WidgetState
 	owner *Screens

@@ -189,3 +189,40 @@ func TestNilWriterIsDiscarded(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWriteStyledSanitizesTerminalControlCharacters(t *testing.T) {
+	terminal, output := newTestTerminal(Size{Rows: 1, Columns: 40})
+	if err := terminal.WriteStyled(Style{}, "safe\x1b[2J\r\n\ttext"); err != nil {
+		t.Fatal(err)
+	}
+	if err := terminal.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output.String(), "safe [2J   text"; got != want {
+		t.Fatalf("sanitized text = %q, want %q", got, want)
+	}
+}
+
+func TestRenderZeroViewportClearsPriorFrameWithoutOutOfBoundsCursor(t *testing.T) {
+	terminal, output := newTestTerminal(Size{Rows: 3, Columns: 5})
+	if err := terminal.Render(NewFrame(Size{Rows: 2, Columns: 5})); err != nil {
+		t.Fatal(err)
+	}
+	if err := terminal.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	terminal.SetViewport(Size{})
+	if err := terminal.Render(NewFrame(Size{Rows: 2, Columns: 5})); err != nil {
+		t.Fatal(err)
+	}
+	if err := terminal.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(output.String(), "\x1b[3;") || strings.Contains(output.String(), "\x1b[2;") {
+		t.Fatalf("zero viewport emitted row movement: %q", output.String())
+	}
+	if !strings.Contains(output.String(), "\x1b[2J\x1b[H") {
+		t.Fatalf("zero viewport did not clear prior frame: %q", output.String())
+	}
+}
