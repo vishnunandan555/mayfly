@@ -16,6 +16,7 @@ var (
 	ErrMissingSecrets        = errors.New("application: secret service is not configured")
 	ErrMissingExecutor       = errors.New("application: command executor is not configured")
 	ErrMissingProject        = errors.New("application: project lookup is not configured")
+	ErrMissingScanner        = errors.New("application: scanner is not configured")
 	ErrProjectNotInitialized = errors.New("application: project is not initialized")
 	ErrVaultMissing          = errors.New("application: vault is missing")
 	ErrWrongPassword         = errors.New("application: wrong password")
@@ -311,6 +312,48 @@ func (s *Service) DeleteCurrentSecret(ctx context.Context, name domain.SecretNam
 		return err
 	}
 	return s.DeleteSecret(ctx, project.ID, name)
+}
+
+// ScanProject delegates heuristic scanning for one validated project and
+// records completion only after the scanner returns successfully. Findings
+// are safe location metadata; they never carry the detected value.
+func (s *Service) ScanProject(ctx context.Context, projectID domain.ProjectID) ([]domain.ScanFinding, error) {
+	if err := projectID.Validate(); err != nil {
+		return nil, err
+	}
+	if s == nil || s.projects == nil {
+		return nil, ErrMissingProject
+	}
+	if s.scanner == nil {
+		return nil, ErrMissingScanner
+	}
+	project, err := s.projects.Get(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	findings, err := s.scanner.Scan(ctx, project)
+	if err != nil {
+		return nil, err
+	}
+	for _, finding := range findings {
+		if err := finding.Validate(); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.audit(ctx, domain.AuditEvent{At: time.Now(), Action: domain.AuditScanCompleted, ProjectID: projectID}); err != nil {
+		return nil, err
+	}
+	return findings, nil
+}
+
+// ScanCurrentProject scans the initialized project containing the current
+// working directory through the injected project lookup boundary.
+func (s *Service) ScanCurrentProject(ctx context.Context) ([]domain.ScanFinding, error) {
+	project, err := s.CurrentProject(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.ScanProject(ctx, project.ID)
 }
 
 func (s *Service) audit(ctx context.Context, event domain.AuditEvent) error {

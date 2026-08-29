@@ -207,6 +207,25 @@ immutable: someone able to rewrite the log and its checkpoint can rewrite its
 history. It contains project IDs, secret names, command names, and exit
 statuses only—never secret values, passwords, keys, or environment dumps.
 
+### Local secret scan
+
+Run the heuristic scanner with:
+
+```text
+mayfly scan
+```
+
+The scanner examines the discovered project tree using Go filesystem APIs. It
+reports high-risk names such as `.env`, credentials files, and private-key
+extensions, plus a small set of private-key, password-assignment, token, and
+API-key-like content patterns. Findings contain only relative paths, 1-based
+line/Unicode-scalar columns where available, categories, severities, and safe
+explanations; matched values are never printed. Exit status is `0` for no
+findings, `3` when findings are reported, and `1` for an operational error.
+`.git`, common generated/build directories, binary or malformed-UTF-8 files,
+and files over the configured size limit are skipped. This is a heuristic
+warning tool and is not proof that a project contains no secrets.
+
 *(Full list with one-line rationale for each goes in `STDLIB.md` — this table is the preview.)*
 
 ## Threat Model

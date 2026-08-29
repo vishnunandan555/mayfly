@@ -64,7 +64,7 @@ func TestExecutionRequestValidation(t *testing.T) {
 }
 
 func TestScanFindingValidation(t *testing.T) {
-	if err := (ScanFinding{Severity: SeverityWarning, Path: "main.go", Line: 12, Message: "possible plaintext credential"}).Validate(); err != nil {
+	if err := (ScanFinding{Severity: SeverityWarning, Path: "main.go", Line: 12, Column: 3, Category: "credential", Message: "possible plaintext credential"}).Validate(); err != nil {
 		t.Fatal(err)
 	}
 	if err := (ScanFinding{Severity: "unknown", Message: "finding"}).Validate(); err == nil {

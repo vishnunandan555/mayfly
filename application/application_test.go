@@ -88,6 +88,12 @@ type fakeVault struct{ secrets SecretService }
 
 func (f fakeVault) Open(context.Context, []byte) (SecretService, error) { return f.secrets, nil }
 
+type fakeScanner struct{ findings []domain.ScanFinding }
+
+func (f fakeScanner) Scan(context.Context, domain.Project) ([]domain.ScanFinding, error) {
+	return append([]domain.ScanFinding(nil), f.findings...), nil
+}
+
 func TestServiceCanBeConstructedWithHandWrittenFakes(t *testing.T) {
 	secrets := &fakeSecrets{}
 	service := NewService(Dependencies{Secrets: secrets})
@@ -234,5 +240,25 @@ func TestServiceValidatesNamesBeforeSecretBackend(t *testing.T) {
 	}
 	if err := NewService(Dependencies{Secrets: secrets}).SetCurrentSecret(context.Background(), "TOKEN", "value"); !errors.Is(err, ErrMissingProject) {
 		t.Fatalf("missing project error = %v", err)
+	}
+}
+
+func TestServiceScansCurrentProjectAndAuditsCompletion(t *testing.T) {
+	auditor := &fakeAudit{}
+	want := []domain.ScanFinding{{
+		Path: "config.txt", Line: 2, Column: 1, Category: "password-assignment",
+		Severity: domain.SeverityWarning, Message: "password-like assignment found",
+	}}
+	service := NewService(Dependencies{
+		Projects: fakeProjects{project: domain.Project{ID: "project-1", Name: "Demo", Path: "/project"}},
+		Scanner:  fakeScanner{findings: want},
+		Auditor:  auditor,
+	})
+	got, err := service.ScanCurrentProject(context.Background())
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("scan = %#v, %v", got, err)
+	}
+	if len(auditor.events) != 1 || auditor.events[0].Action != domain.AuditScanCompleted || auditor.events[0].ProjectID != "project-1" {
+		t.Fatalf("scan audit events = %#v", auditor.events)
 	}
 }

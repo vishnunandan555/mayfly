@@ -18,6 +18,7 @@ import (
 	"mayfly/domain"
 	"mayfly/executor"
 	"mayfly/project"
+	"mayfly/scanner"
 	"mayfly/vault"
 )
 
@@ -37,7 +38,7 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 		}
 		return 0
 	}
-	if args[0] != "set" && args[0] != "get" && args[0] != "list" && args[0] != "delete" && args[0] != "run" && args[0] != "audit" {
+	if args[0] != "set" && args[0] != "get" && args[0] != "list" && args[0] != "delete" && args[0] != "run" && args[0] != "audit" && args[0] != "scan" {
 		_, _ = fmt.Fprintf(errorOutput, "mayfly: unknown command %q\n", args[0])
 		usage(errorOutput)
 		return 2
@@ -90,12 +91,17 @@ func newRuntime() (*commandRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
+	secretScanner, err := scanner.New(scanner.Options{SkipPaths: []string{storage.Path(), auditLog.Path()}})
+	if err != nil {
+		return nil, err
+	}
 	return &commandRuntime{
 		service: application.NewService(application.Dependencies{
 			Projects: registry,
 			Vault:    storage,
 			Executor: executor.NewProcessExecutor(nil, nil, nil),
 			Auditor:  auditLog,
+			Scanner:  secretScanner,
 		}),
 		storage: storage,
 		audit:   auditLog,
@@ -113,6 +119,32 @@ func (r *commandRuntime) execute(ctx context.Context, args []string, input io.Re
 	command := args[0]
 	if command == "audit" {
 		return r.executeAudit(ctx, args, output)
+	}
+	if command == "scan" {
+		if len(args) != 1 {
+			return application.ExecutionResult{}, errorsWithUsage("scan takes no arguments")
+		}
+		findings, err := r.service.ScanCurrentProject(ctx)
+		if err != nil {
+			return application.ExecutionResult{}, err
+		}
+		for _, finding := range findings {
+			if _, err := fmt.Fprintf(output, "%s", finding.Path); err != nil {
+				return application.ExecutionResult{}, err
+			}
+			if finding.Line > 0 {
+				if _, err := fmt.Fprintf(output, ":%d:%d", finding.Line, finding.Column); err != nil {
+					return application.ExecutionResult{}, err
+				}
+			}
+			if _, err := fmt.Fprintf(output, ": %s [%s] %s\n", finding.Severity, finding.Category, finding.Message); err != nil {
+				return application.ExecutionResult{}, err
+			}
+		}
+		if len(findings) > 0 {
+			return application.ExecutionResult{ExitCode: 3}, nil
+		}
+		return application.ExecutionResult{}, nil
 	}
 	var name domain.SecretName
 	if command == "list" {
@@ -355,4 +387,6 @@ func usage(output io.Writer) {
 	_, _ = fmt.Fprintln(output, "  mayfly list")
 	_, _ = fmt.Fprintln(output, "  mayfly delete <NAME>")
 	_, _ = fmt.Fprintln(output, "  mayfly run <COMMAND> [ARGS...]")
+	_, _ = fmt.Fprintln(output, "  mayfly scan")
+	_, _ = fmt.Fprintln(output, "  mayfly audit [verify]")
 }

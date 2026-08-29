@@ -244,6 +244,8 @@ type ScanFinding struct {
 	Severity ScanSeverity
 	Path     string
 	Line     int
+	Column   int
+	Category string
 	Message  string
 }
 
@@ -251,11 +253,11 @@ func (f ScanFinding) Validate() error {
 	if f.Severity != SeverityInfo && f.Severity != SeverityWarning && f.Severity != SeverityCritical {
 		return fmt.Errorf("%w: severity", ErrInvalidScanFinding)
 	}
-	if !utf8.ValidString(f.Path) || strings.ContainsRune(f.Path, '\x00') || !utf8.ValidString(f.Message) || containsControl(f.Message) {
+	if !utf8.ValidString(f.Path) || strings.ContainsRune(f.Path, '\x00') || !utf8.ValidString(f.Category) || containsControl(f.Category) || strings.TrimSpace(f.Category) == "" || !utf8.ValidString(f.Message) || containsControl(f.Message) {
 		return fmt.Errorf("%w: malformed text", ErrInvalidScanFinding)
 	}
-	if f.Line < 0 {
-		return fmt.Errorf("%w: negative line", ErrInvalidScanFinding)
+	if f.Line < 0 || f.Column < 0 {
+		return fmt.Errorf("%w: negative location", ErrInvalidScanFinding)
 	}
 	return nil
 }

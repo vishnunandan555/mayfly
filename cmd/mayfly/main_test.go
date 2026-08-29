@@ -64,6 +64,12 @@ type commandTestExecutor struct {
 	env     application.Environment
 }
 
+type commandTestScanner struct{ findings []domain.ScanFinding }
+
+func (s commandTestScanner) Scan(context.Context, domain.Project) ([]domain.ScanFinding, error) {
+	return append([]domain.ScanFinding(nil), s.findings...), nil
+}
+
 func (e *commandTestExecutor) Execute(_ context.Context, request domain.ExecutionRequest, environment application.Environment) (application.ExecutionResult, error) {
 	e.request = request
 	e.env = append(application.Environment(nil), environment...)
@@ -189,5 +195,23 @@ func TestAuditCommandPrintsSafeMetadataAndVerifies(t *testing.T) {
 	output.Reset()
 	if _, err := runtime.executeAudit(context.Background(), []string{"audit", "verify"}, &output); err != nil || output.String() != "Audit verified\n" {
 		t.Fatalf("audit verify = %q, %v", output.String(), err)
+	}
+}
+
+func TestExecuteScanReportsFindingsWithoutValuesAndUsesCIExitCode(t *testing.T) {
+	runtime := &commandRuntime{service: application.NewService(application.Dependencies{
+		Projects: commandTestProjects{project: domain.Project{ID: "project-1", Name: "Demo", Path: "/project"}},
+		Scanner: commandTestScanner{findings: []domain.ScanFinding{{
+			Path: ".env", Category: "high-risk-filename", Severity: domain.SeverityWarning,
+			Message: "environment-style file may contain plaintext secrets",
+		}}},
+	})}
+	var output strings.Builder
+	result, err := runtime.execute(context.Background(), []string{"scan"}, strings.NewReader(""), &output, &strings.Builder{})
+	if err != nil || result.ExitCode != 3 {
+		t.Fatalf("scan = %#v, %v", result, err)
+	}
+	if !strings.Contains(output.String(), ".env") || strings.Contains(output.String(), "secret-value") {
+		t.Fatalf("scan output = %q", output.String())
 	}
 }
