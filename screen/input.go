@@ -35,6 +35,7 @@ const (
 	EventCtrlW
 	EventPageUp
 	EventPageDown
+	EventShiftTab
 )
 
 // Event is one keyboard event. Rune is populated for EventRune. Bytes is
@@ -53,6 +54,10 @@ var (
 	// errInputTimeout is internal. A raw terminal read uses VTIME to report
 	// that no byte arrived during the escape-sequence ambiguity window.
 	errInputTimeout = errors.New("screen: input read timeout")
+
+	// ErrInputTimeout indicates that a raw terminal had no byte available
+	// during its configured polling interval.
+	ErrInputTimeout = errInputTimeout
 )
 
 // InputReader combines a byte reader and the incremental ANSI parser. It is
@@ -94,6 +99,9 @@ func (r *InputReader) ReadEvent() (Event, error) {
 			r.queued = append(r.queued, r.parser.Feed([]byte{value})...)
 		case errInputTimeout:
 			r.queued = append(r.queued, r.parser.Flush()...)
+			if len(r.queued) == 0 {
+				return Event{}, ErrInputTimeout
+			}
 		case io.EOF:
 			r.sourceDone = true
 			r.sourceErr = io.EOF

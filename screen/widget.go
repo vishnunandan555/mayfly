@@ -17,8 +17,9 @@ type Widget interface {
 // WidgetState contains bounds and focus state for widgets that do not need
 // specialized behavior. It is intended to be embedded in custom widgets.
 type WidgetState struct {
-	bounds  Rect
-	focused bool
+	bounds   Rect
+	focused  bool
+	disabled bool
 }
 
 // Bounds returns the widget's assigned half-open rectangle.
@@ -46,7 +47,24 @@ func (s *WidgetState) Focused() bool {
 // SetFocused changes focus state without changing any other widget state.
 func (s *WidgetState) SetFocused(focused bool) {
 	if s != nil {
-		s.focused = focused
+		s.focused = focused && !s.disabled
+	}
+}
+
+// Enabled reports whether the widget may receive focus. It is optional in the
+// Widget interface but is honored by Application when present.
+func (s *WidgetState) Enabled() bool {
+	return s != nil && !s.disabled
+}
+
+// SetEnabled enables or disables a widget. Disabling also removes focus.
+func (s *WidgetState) SetEnabled(enabled bool) {
+	if s == nil {
+		return
+	}
+	s.disabled = !enabled
+	if !enabled {
+		s.focused = false
 	}
 }
 

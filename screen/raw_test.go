@@ -6,6 +6,30 @@ import (
 	"testing"
 )
 
+type timeoutInputReader struct{}
+
+func (timeoutInputReader) Read([]byte) (int, error) { return 0, nil }
+
+func TestRawInputTimeoutDoesNotRestoreMode(t *testing.T) {
+	restores := 0
+	raw := &RawInput{
+		input:   NewInput(timeoutInputReader{}),
+		restore: func() error { restores++; return nil },
+	}
+	if _, err := raw.ReadEvent(); !errors.Is(err, ErrInputTimeout) {
+		t.Fatalf("ReadEvent error = %v, want timeout", err)
+	}
+	if restores != 0 {
+		t.Fatalf("timeout restored terminal %d times", restores)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if restores != 1 {
+		t.Fatalf("Close restored terminal %d times, want 1", restores)
+	}
+}
+
 func TestRawModeRejectsNonTTYWithoutRequiringInteractiveTerminal(t *testing.T) {
 	reader, writer, err := os.Pipe()
 	if err != nil {

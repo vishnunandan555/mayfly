@@ -191,6 +191,8 @@ func parseCSI(params []byte, final byte) Event {
 		if bytes.Equal(params, []byte("4")) || bytes.Equal(params, []byte("8")) {
 			return Event{Type: EventEnd}
 		}
+	case 'Z':
+		return Event{Type: EventShiftTab}
 	}
 	return Event{Type: EventUnknown}
 }

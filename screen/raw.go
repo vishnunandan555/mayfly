@@ -33,8 +33,9 @@ func NewRawInput(file *os.File) (*RawInput, error) {
 	return &RawInput{input: NewInput(file), restore: restore}, nil
 }
 
-// ReadEvent reads the next event. Any source error triggers restoration before
-// the error is returned.
+// ReadEvent reads the next event. A normal polling timeout is returned to the
+// caller without changing terminal state; any other source error triggers
+// restoration before the error is returned.
 func (r *RawInput) ReadEvent() (Event, error) {
 	r.mu.Lock()
 	closed := r.closed
@@ -45,6 +46,11 @@ func (r *RawInput) ReadEvent() (Event, error) {
 
 	event, err := r.input.ReadEvent()
 	if err != nil {
+		// A timeout is part of normal incremental escape-sequence parsing. It
+		// must not end the input source or restore raw mode between events.
+		if errors.Is(err, ErrInputTimeout) {
+			return event, err
+		}
 		if restoreErr := r.Close(); restoreErr != nil {
 			return event, errors.Join(err, restoreErr)
 		}

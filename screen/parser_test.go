@@ -100,6 +100,13 @@ func TestParserHandlesRepeatedSequences(t *testing.T) {
 	}
 }
 
+func TestParserDecodesShiftTabAndPageSequences(t *testing.T) {
+	want := []Event{{Type: EventShiftTab}, {Type: EventPageUp}, {Type: EventPageDown}}
+	if got := parseAll([]byte("\x1b[Z\x1b[5~\x1b[6~")); !reflect.DeepEqual(got, want) {
+		t.Fatalf("navigation events = %#v, want %#v", got, want)
+	}
+}
+
 func TestInputReaderReadsEventsUntilEOF(t *testing.T) {
 	input := NewInput(bytes.NewBufferString("\x1b[Dq\x1b"))
 	want := []Event{{Type: EventArrowLeft}, {Type: EventRune, Rune: 'q'}, {Type: EventEscape}}

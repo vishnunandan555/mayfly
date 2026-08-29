@@ -271,10 +271,14 @@ func (t *Terminal) clipPoint(row, column int) (int, int) {
 	if column < 0 {
 		column = 0
 	}
-	if t.viewport.Rows > 0 && row >= t.viewport.Rows {
+	if t.viewport.Rows == 0 {
+		row = 0
+	} else if row >= t.viewport.Rows {
 		row = t.viewport.Rows - 1
 	}
-	if t.viewport.Columns > 0 && column >= t.viewport.Columns {
+	if t.viewport.Columns == 0 {
+		column = 0
+	} else if column >= t.viewport.Columns {
 		column = t.viewport.Columns - 1
 	}
 	return row, column
@@ -338,7 +342,11 @@ func (t *Terminal) Render(frame *Frame) error {
 	visible = visible.normalized()
 
 	if visible.Rows == 0 || visible.Columns == 0 {
-		for row := 0; row < t.previousFrame.Rows; row++ {
+		rowsToClear := t.previousFrame.Rows
+		if t.viewport.Rows < rowsToClear {
+			rowsToClear = t.viewport.Rows
+		}
+		for row := 0; row < rowsToClear; row++ {
 			if err := t.MoveCursor(row, 0); err != nil {
 				return err
 			}
@@ -346,7 +354,7 @@ func (t *Terminal) Render(frame *Frame) error {
 				return err
 			}
 		}
-		if t.previousFrame.Rows > 0 {
+		if rowsToClear > 0 {
 			if err := t.MoveCursor(0, 0); err != nil {
 				return err
 			}
