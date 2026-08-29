@@ -90,6 +90,12 @@ type AuditService interface {
 	Record(ctx context.Context, event domain.AuditEvent) error
 }
 
+// AuditReader provides access to safe audit trail records and verification.
+type AuditReader interface {
+	Events(ctx context.Context) ([]domain.AuditEvent, error)
+	Verify(ctx context.Context) error
+}
+
 // Scanner is the optional leak-scanning boundary. Findings must contain
 // locations and safe descriptions, never the matched secret itself.
 type Scanner interface {
@@ -369,6 +375,32 @@ func (s *Service) audit(ctx context.Context, event domain.AuditEvent) error {
 		return ErrAuditFailed
 	}
 	return nil
+}
+
+// AuditEvents returns verified safe metadata audit events from the configured auditor.
+func (s *Service) AuditEvents(ctx context.Context) ([]domain.AuditEvent, error) {
+	if s == nil || s.auditor == nil {
+		return nil, ErrAuditFailed
+	}
+	if reader, ok := s.auditor.(interface {
+		Events(context.Context) ([]domain.AuditEvent, error)
+	}); ok {
+		return reader.Events(ctx)
+	}
+	return nil, ErrAuditFailed
+}
+
+// VerifyAudit verifies the integrity of the configured audit log chain.
+func (s *Service) VerifyAudit(ctx context.Context) error {
+	if s == nil || s.auditor == nil {
+		return ErrAuditFailed
+	}
+	if verifier, ok := s.auditor.(interface {
+		Verify(context.Context) error
+	}); ok {
+		return verifier.Verify(ctx)
+	}
+	return ErrAuditFailed
 }
 
 // Run resolves selected secrets only in memory, passes them to the executor,

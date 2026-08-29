@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"mayfly"
 	"mayfly/application"
 	"mayfly/audit"
 	"mayfly/domain"
@@ -38,7 +39,7 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 		}
 		return 0
 	}
-	if args[0] != "set" && args[0] != "get" && args[0] != "list" && args[0] != "delete" && args[0] != "run" && args[0] != "audit" && args[0] != "scan" {
+	if args[0] != "set" && args[0] != "get" && args[0] != "list" && args[0] != "delete" && args[0] != "run" && args[0] != "audit" && args[0] != "scan" && args[0] != "tui" {
 		_, _ = fmt.Fprintf(errorOutput, "mayfly: unknown command %q\n", args[0])
 		usage(errorOutput)
 		return 2
@@ -117,6 +118,20 @@ func (r *commandRuntime) execute(ctx context.Context, args []string, input io.Re
 	}
 	reader := bufio.NewReader(input)
 	command := args[0]
+	if command == "tui" {
+		if len(args) != 1 {
+			return application.ExecutionResult{}, errorsWithUsage("tui takes no arguments")
+		}
+		screenService := application.NewScreenService(r.service)
+		screens := mayfly.NewScreens(screenService)
+		if inputFile, ok := input.(*os.File); ok {
+			if err := screens.RunIO(inputFile, output); err != nil {
+				return application.ExecutionResult{}, err
+			}
+			return application.ExecutionResult{}, nil
+		}
+		return application.ExecutionResult{}, errors.New("tui requires an interactive terminal input")
+	}
 	if command == "audit" {
 		return r.executeAudit(ctx, args, output)
 	}
@@ -382,6 +397,7 @@ func (e usageError) Error() string { return string(e) }
 func usage(output io.Writer) {
 	_, _ = fmt.Fprintln(output, "usage:")
 	_, _ = fmt.Fprintln(output, "  mayfly init [-path DIR] [-registry FILE]")
+	_, _ = fmt.Fprintln(output, "  mayfly tui")
 	_, _ = fmt.Fprintln(output, "  mayfly set <NAME>")
 	_, _ = fmt.Fprintln(output, "  mayfly get <NAME>")
 	_, _ = fmt.Fprintln(output, "  mayfly list")
