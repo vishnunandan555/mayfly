@@ -188,6 +188,25 @@ after execution; Go's garbage collector does not guarantee cryptographic
 erasure of prior string storage. A child terminated by a Unix signal is
 reported using the conventional `128+signal` status where available.
 
+### Audit trail
+
+MayFly records safe application metadata in `~/.mayfly/audit.log` and exposes:
+
+```text
+mayfly audit
+mayfly audit verify
+```
+
+The log uses canonical newline-delimited JSON event records, a SHA-256
+previous/current hash chain, and a checkpoint containing the expected event
+count and head hash. Verification detects altered, removed, reordered, or
+malformed records and broken links. Appends use a synced temporary file and
+atomic rename where supported, so a normal write failure leaves the previous
+complete log in place. The trail is tamper-evident, not cryptographically
+immutable: someone able to rewrite the log and its checkpoint can rewrite its
+history. It contains project IDs, secret names, command names, and exit
+statuses only—never secret values, passwords, keys, or environment dumps.
+
 *(Full list with one-line rationale for each goes in `STDLIB.md` — this table is the preview.)*
 
 ## Threat Model

@@ -6,7 +6,6 @@ package application
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"mayfly/domain"
@@ -142,14 +141,19 @@ func (s *Service) OpenVault(ctx context.Context, password []byte) (*Service, err
 	if err != nil {
 		return nil, err
 	}
-	return NewService(Dependencies{
+	opened := NewService(Dependencies{
 		Projects: s.projects,
 		Vault:    s.vault,
 		Secrets:  secrets,
 		Executor: s.executor,
 		Auditor:  s.auditor,
 		Scanner:  s.scanner,
-	}), nil
+	})
+	if err := opened.audit(ctx, domain.AuditEvent{At: time.Now(), Action: domain.AuditVaultUnlocked}); err != nil {
+		_ = opened.Close()
+		return nil, err
+	}
+	return opened, nil
 }
 
 // Close releases an opened vault session when its SecretService supplies a
@@ -344,6 +348,12 @@ func (s *Service) Run(ctx context.Context, request domain.ExecutionRequest) (Exe
 	if _, err := s.projects.Get(ctx, request.ProjectID); err != nil {
 		return ExecutionResult{}, err
 	}
+	if err := s.audit(ctx, domain.AuditEvent{
+		At: time.Now(), Action: domain.AuditCommandStarted,
+		ProjectID: request.ProjectID, Command: request.Command[0],
+	}); err != nil {
+		return ExecutionResult{}, err
+	}
 
 	names := append([]domain.SecretName(nil), request.SecretNames...)
 	if len(names) == 0 {
@@ -365,16 +375,24 @@ func (s *Service) Run(ctx context.Context, request domain.ExecutionRequest) (Exe
 			return ExecutionResult{}, err
 		}
 		environment = append(environment, EnvironmentEntry{Name: string(name), Value: material.Value})
+		if err := s.audit(ctx, domain.AuditEvent{
+			At: time.Now(), Action: domain.AuditSecretInjected,
+			ProjectID: request.ProjectID, Secret: name,
+		}); err != nil {
+			return ExecutionResult{}, err
+		}
 	}
 
 	defer environment.Clear()
 	result, err := s.executor.Execute(ctx, request, environment)
 	if s.auditor != nil {
+		status := result.ExitCode
 		auditErr := s.auditor.Record(ctx, domain.AuditEvent{
-			At:        time.Now(),
-			Action:    domain.AuditCommandExecuted,
-			ProjectID: request.ProjectID,
-			Command:   strings.Join(request.Command, " "),
+			At:         time.Now(),
+			Action:     domain.AuditCommandExited,
+			ProjectID:  request.ProjectID,
+			Command:    request.Command[0],
+			ExitStatus: &status,
 		})
 		if auditErr != nil {
 			auditErr = ErrAuditFailed

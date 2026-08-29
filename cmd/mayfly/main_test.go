@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"mayfly/application"
+	"mayfly/audit"
 	"mayfly/domain"
 )
 
@@ -161,5 +164,30 @@ func TestRunCommandValidationReturnsUsageExitCode(t *testing.T) {
 	}
 	if strings.Contains(errorOutput.String(), "secret-value") {
 		t.Fatal("validation output leaked a secret")
+	}
+}
+
+func TestAuditCommandPrintsSafeMetadataAndVerifies(t *testing.T) {
+	log, err := audit.New(filepath.Join(t.TempDir(), "audit.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Record(context.Background(), domain.AuditEvent{
+		At: time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC), Action: domain.AuditSecretInjected,
+		ProjectID: "project-1", Secret: "TOKEN",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	runtime := &commandRuntime{audit: log}
+	var output strings.Builder
+	if _, err := runtime.executeAudit(context.Background(), []string{"audit"}, &output); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "SECRET_INJECTED") || strings.Contains(output.String(), "secret-value") {
+		t.Fatalf("audit output = %q", output.String())
+	}
+	output.Reset()
+	if _, err := runtime.executeAudit(context.Background(), []string{"audit", "verify"}, &output); err != nil || output.String() != "Audit verified\n" {
+		t.Fatalf("audit verify = %q, %v", output.String(), err)
 	}
 }

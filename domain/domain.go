@@ -126,22 +126,32 @@ func (SecretMaterial) String() string { return "[REDACTED SECRET]" }
 type AuditAction string
 
 const (
-	AuditVaultOpened     AuditAction = "vault_opened"
-	AuditSecretListed    AuditAction = "secret_listed"
-	AuditSecretRead      AuditAction = "secret_read"
-	AuditSecretWritten   AuditAction = "secret_written"
-	AuditSecretDeleted   AuditAction = "secret_deleted"
-	AuditCommandExecuted AuditAction = "command_executed"
-	AuditScanCompleted   AuditAction = "scan_completed"
+	AuditProjectInitialized AuditAction = "PROJECT_INITIALIZED"
+	AuditVaultUnlocked      AuditAction = "VAULT_UNLOCKED"
+	AuditSecretCreated      AuditAction = "SECRET_CREATED"
+	AuditSecretUpdated      AuditAction = "SECRET_UPDATED"
+	AuditSecretDeleted      AuditAction = "SECRET_DELETED"
+	AuditSecretInjected     AuditAction = "SECRET_INJECTED"
+	AuditCommandStarted     AuditAction = "COMMAND_STARTED"
+	AuditCommandExited      AuditAction = "COMMAND_EXITED"
+	AuditScanCompleted      AuditAction = "SCAN_COMPLETED"
+
+	// These names remain for compatibility with the earlier application API.
+	AuditVaultOpened     AuditAction = AuditVaultUnlocked
+	AuditSecretListed    AuditAction = "SECRET_LISTED"
+	AuditSecretRead      AuditAction = "SECRET_READ"
+	AuditSecretWritten   AuditAction = AuditSecretUpdated
+	AuditCommandExecuted AuditAction = "COMMAND_EXECUTED"
 )
 
 // AuditEvent contains metadata only. It must never carry secret values.
 type AuditEvent struct {
-	At        time.Time
-	Action    AuditAction
-	ProjectID ProjectID
-	Secret    SecretName
-	Command   string
+	At         time.Time
+	Action     AuditAction
+	ProjectID  ProjectID
+	Secret     SecretName
+	Command    string
+	ExitStatus *int
 }
 
 func (e AuditEvent) Validate() error {
@@ -150,6 +160,9 @@ func (e AuditEvent) Validate() error {
 	}
 	if e.Action == "" {
 		return errors.New("domain: audit event action is required")
+	}
+	if !validAuditAction(e.Action) {
+		return errors.New("domain: unsupported audit event action")
 	}
 	if e.ProjectID != "" {
 		if err := e.ProjectID.Validate(); err != nil {
@@ -164,7 +177,22 @@ func (e AuditEvent) Validate() error {
 	if !utf8.ValidString(e.Command) || containsControl(e.Command) {
 		return errors.New("domain: audit command is malformed")
 	}
+	if e.ExitStatus != nil && *e.ExitStatus < 0 {
+		return errors.New("domain: audit exit status is malformed")
+	}
 	return nil
+}
+
+func validAuditAction(action AuditAction) bool {
+	switch action {
+	case AuditProjectInitialized, AuditVaultUnlocked, AuditSecretCreated,
+		AuditSecretUpdated, AuditSecretDeleted, AuditSecretInjected,
+		AuditCommandStarted, AuditCommandExited, AuditScanCompleted,
+		AuditSecretListed, AuditSecretRead, AuditCommandExecuted:
+		return true
+	default:
+		return false
+	}
 }
 
 // ExecutionRequest describes a child process request without containing the

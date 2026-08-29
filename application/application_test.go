@@ -126,7 +126,7 @@ func TestRunLoadsSelectedSecretsAndAuditsWithoutValues(t *testing.T) {
 	if result.ExitCode != 7 || len(executor.env) != 1 || executor.env[0].Value != "do-not-log" {
 		t.Fatalf("run result/environment = %#v/%#v", result, executor.env)
 	}
-	if len(auditor.events) != 1 || auditor.events[0].Secret != "" {
+	if len(auditor.events) != 3 || auditor.events[0].Action != domain.AuditCommandStarted || auditor.events[0].Secret != "" || auditor.events[1].Action != domain.AuditSecretInjected || auditor.events[1].Secret != "TOKEN" || auditor.events[2].Action != domain.AuditCommandExited || auditor.events[2].ExitStatus == nil || *auditor.events[2].ExitStatus != 7 {
 		t.Fatalf("audit events = %#v", auditor.events)
 	}
 }

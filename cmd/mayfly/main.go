@@ -11,8 +11,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"mayfly/application"
+	"mayfly/audit"
 	"mayfly/domain"
 	"mayfly/executor"
 	"mayfly/project"
@@ -35,7 +37,7 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 		}
 		return 0
 	}
-	if args[0] != "set" && args[0] != "get" && args[0] != "list" && args[0] != "delete" && args[0] != "run" {
+	if args[0] != "set" && args[0] != "get" && args[0] != "list" && args[0] != "delete" && args[0] != "run" && args[0] != "audit" {
 		_, _ = fmt.Fprintf(errorOutput, "mayfly: unknown command %q\n", args[0])
 		usage(errorOutput)
 		return 2
@@ -64,6 +66,7 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 type commandRuntime struct {
 	service *application.Service
 	storage *vault.Storage
+	audit   *audit.Log
 }
 
 func newRuntime() (*commandRuntime, error) {
@@ -79,13 +82,23 @@ func newRuntime() (*commandRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
+	auditPath, err := audit.DefaultPath()
+	if err != nil {
+		return nil, err
+	}
+	auditLog, err := audit.New(auditPath)
+	if err != nil {
+		return nil, err
+	}
 	return &commandRuntime{
 		service: application.NewService(application.Dependencies{
 			Projects: registry,
 			Vault:    storage,
 			Executor: executor.NewProcessExecutor(nil, nil, nil),
+			Auditor:  auditLog,
 		}),
 		storage: storage,
+		audit:   auditLog,
 	}, nil
 }
 
@@ -98,6 +111,9 @@ func (r *commandRuntime) execute(ctx context.Context, args []string, input io.Re
 	}
 	reader := bufio.NewReader(input)
 	command := args[0]
+	if command == "audit" {
+		return r.executeAudit(ctx, args, output)
+	}
 	var name domain.SecretName
 	if command == "list" {
 		if len(args) != 1 {
@@ -190,6 +206,50 @@ func (r *commandRuntime) execute(ctx context.Context, args []string, input io.Re
 	}
 }
 
+func (r *commandRuntime) executeAudit(ctx context.Context, args []string, output io.Writer) (application.ExecutionResult, error) {
+	if r == nil || r.audit == nil {
+		return application.ExecutionResult{}, application.ErrAuditFailed
+	}
+	if len(args) == 2 && args[1] == "verify" {
+		if err := r.audit.Verify(ctx); err != nil {
+			return application.ExecutionResult{}, err
+		}
+		_, err := fmt.Fprintln(output, "Audit verified")
+		return application.ExecutionResult{}, err
+	}
+	if len(args) != 1 {
+		return application.ExecutionResult{}, errorsWithUsage("audit accepts only the optional verify subcommand")
+	}
+	events, err := r.audit.Events(ctx)
+	if err != nil {
+		return application.ExecutionResult{}, err
+	}
+	for _, event := range events {
+		if _, err := fmt.Fprintf(output, "%s %s project=%s", event.At.UTC().Format(time.RFC3339Nano), event.Action, event.ProjectID); err != nil {
+			return application.ExecutionResult{}, err
+		}
+		if event.Secret != "" {
+			if _, err := fmt.Fprintf(output, " secret=%s", event.Secret); err != nil {
+				return application.ExecutionResult{}, err
+			}
+		}
+		if event.Command != "" {
+			if _, err := fmt.Fprintf(output, " command=%s", event.Command); err != nil {
+				return application.ExecutionResult{}, err
+			}
+		}
+		if event.ExitStatus != nil {
+			if _, err := fmt.Fprintf(output, " exit=%d", *event.ExitStatus); err != nil {
+				return application.ExecutionResult{}, err
+			}
+		}
+		if _, err := fmt.Fprintln(output); err != nil {
+			return application.ExecutionResult{}, err
+		}
+	}
+	return application.ExecutionResult{}, nil
+}
+
 func (r *commandRuntime) open(ctx context.Context, input *bufio.Reader, errorOutput io.Writer, allowInitialize bool) (*application.Service, error) {
 	if r == nil || r.service == nil {
 		return nil, application.ErrMissingVaultStorage
@@ -238,6 +298,21 @@ func runInit(args []string, output, errorOutput io.Writer) error {
 	identity, created, err := registry.Initialize(*root)
 	if err != nil {
 		return err
+	}
+	if created {
+		auditPath, err := audit.DefaultPath()
+		if err != nil {
+			return err
+		}
+		auditLog, err := audit.New(auditPath)
+		if err != nil {
+			return err
+		}
+		if err := auditLog.Record(context.Background(), domain.AuditEvent{
+			At: time.Now(), Action: domain.AuditProjectInitialized, ProjectID: identity.ID,
+		}); err != nil {
+			return err
+		}
 	}
 	if created {
 		_, _ = fmt.Fprintf(output, "Initialized project %s at %s\n", identity.ID, identity.Path)
