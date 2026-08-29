@@ -1,6 +1,9 @@
-// Package screen provides the output and rendering foundation for MayFly's
-// terminal UI. It deliberately does not read keyboard input or change the
-// terminal into raw mode.
+// Package screen provides MayFly's terminal UI output and input foundation.
+// Input decoding is explicit, and raw terminal mode is entered only when
+// NewRawInput or RunRaw is called. Raw mode currently targets Linux termios;
+// unsupported operating systems return ErrRawModeUnsupported. The parser
+// targets common ANSI/VT-compatible terminals rather than every terminal
+// protocol.
 package screen
 
 import (
