@@ -262,3 +262,71 @@ func TestServiceScansCurrentProjectAndAuditsCompletion(t *testing.T) {
 		t.Fatalf("scan audit events = %#v", auditor.events)
 	}
 }
+
+func TestScreenServiceAdapterLockLifecycle(t *testing.T) {
+	project := domain.Project{ID: "project-1", Name: "Demo"}
+	secrets := &fakeSecrets{
+		list: []domain.Secret{{ProjectID: "project-1", Name: "TOKEN"}},
+	}
+	vault := fakeVault{secrets: secrets}
+
+	// 1. Pre-unlocked service
+	unlockedService := NewService(Dependencies{
+		Projects: fakeProjects{project: project},
+		Vault:    vault,
+		Secrets:  secrets,
+	})
+	adapter := NewScreenService(unlockedService)
+	if !adapter.IsUnlocked() {
+		t.Fatal("pre-unlocked screen service adapter should report IsUnlocked() == true")
+	}
+	items, err := adapter.ListSecrets(context.Background())
+	if err != nil || len(items) != 1 {
+		t.Fatalf("ListSecrets before close = %v, %v", items, err)
+	}
+
+	// Close adapter and verify it is locked
+	if err := adapter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if adapter.IsUnlocked() {
+		t.Fatal("adapter should report IsUnlocked() == false after Close()")
+	}
+	if _, err := adapter.ListSecrets(context.Background()); !errors.Is(err, ErrMissingSecrets) {
+		t.Fatalf("ListSecrets after close error = %v, want ErrMissingSecrets", err)
+	}
+
+	// Re-unlocking via adapter
+	if err := adapter.Unlock(context.Background(), "pass"); err != nil {
+		t.Fatal(err)
+	}
+	if !adapter.IsUnlocked() {
+		t.Fatal("adapter should report IsUnlocked() == true after Unlock()")
+	}
+	if items, err := adapter.ListSecrets(context.Background()); err != nil || len(items) != 1 {
+		t.Fatalf("ListSecrets after re-unlock = %v, %v", items, err)
+	}
+
+	// 2. Initially locked service
+	lockedService := NewService(Dependencies{
+		Projects: fakeProjects{project: project},
+		Vault:    vault,
+	})
+	adapterLocked := NewScreenService(lockedService)
+	if adapterLocked.IsUnlocked() {
+		t.Fatal("locked screen service adapter should report IsUnlocked() == false")
+	}
+	if err := adapterLocked.Unlock(context.Background(), "pass"); err != nil {
+		t.Fatal(err)
+	}
+	if !adapterLocked.IsUnlocked() {
+		t.Fatal("adapter should report IsUnlocked() == true after Unlock()")
+	}
+	if err := adapterLocked.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if adapterLocked.IsUnlocked() {
+		t.Fatal("adapter should report IsUnlocked() == false after Close()")
+	}
+}
+

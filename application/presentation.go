@@ -76,14 +76,29 @@ type screenServiceAdapter struct {
 
 // NewScreenService creates a ScreenService backed by an application.Service.
 func NewScreenService(service *Service) ScreenService {
-	adapter := &screenServiceAdapter{base: service}
-	if service != nil && service.secrets != nil {
+	if service == nil {
+		return &screenServiceAdapter{}
+	}
+	adapter := &screenServiceAdapter{}
+	if service.secrets != nil {
 		adapter.unlocked = service
+		adapter.base = NewService(Dependencies{
+			Projects: service.projects,
+			Vault:    service.vault,
+			Executor: service.executor,
+			Auditor:  service.auditor,
+			Scanner:  service.scanner,
+		})
+	} else {
+		adapter.base = service
 	}
 	return adapter
 }
 
 func (a *screenServiceAdapter) active() *Service {
+	if a == nil {
+		return nil
+	}
 	if a.unlocked != nil {
 		return a.unlocked
 	}
@@ -120,35 +135,35 @@ func (a *screenServiceAdapter) IsUnlocked() bool {
 	if a == nil {
 		return false
 	}
-	return a.unlocked != nil || (a.base != nil && a.base.secrets != nil)
+	return a.unlocked != nil
 }
 
 func (a *screenServiceAdapter) ListSecrets(ctx context.Context) ([]domain.Secret, error) {
-	if a == nil || a.active() == nil {
+	if a == nil || a.unlocked == nil {
 		return nil, ErrMissingSecrets
 	}
-	return a.active().ListCurrentSecrets(ctx)
+	return a.unlocked.ListCurrentSecrets(ctx)
 }
 
 func (a *screenServiceAdapter) GetSecret(ctx context.Context, name domain.SecretName) (domain.SecretMaterial, error) {
-	if a == nil || a.active() == nil {
+	if a == nil || a.unlocked == nil {
 		return domain.SecretMaterial{}, ErrMissingSecrets
 	}
-	return a.active().GetCurrentSecret(ctx, name)
+	return a.unlocked.GetCurrentSecret(ctx, name)
 }
 
 func (a *screenServiceAdapter) SetSecret(ctx context.Context, name domain.SecretName, value string) error {
-	if a == nil || a.active() == nil {
+	if a == nil || a.unlocked == nil {
 		return ErrMissingSecrets
 	}
-	return a.active().SetCurrentSecret(ctx, name, value)
+	return a.unlocked.SetCurrentSecret(ctx, name, value)
 }
 
 func (a *screenServiceAdapter) DeleteSecret(ctx context.Context, name domain.SecretName) error {
-	if a == nil || a.active() == nil {
+	if a == nil || a.unlocked == nil {
 		return ErrMissingSecrets
 	}
-	return a.active().DeleteCurrentSecret(ctx, name)
+	return a.unlocked.DeleteCurrentSecret(ctx, name)
 }
 
 func (a *screenServiceAdapter) Scan(ctx context.Context) ([]domain.ScanFinding, error) {
@@ -200,13 +215,14 @@ func ScreenServiceFromOpener(opener ScreenVaultOpener) ScreenService {
 }
 
 type legacyVaultAdapter struct {
-	vault ScreenVault
+	vault  ScreenVault
+	closed bool
 }
 
 func (l *legacyVaultAdapter) ProjectPath(context.Context) (string, error) { return "", nil }
 func (l *legacyVaultAdapter) Unlock(context.Context, string) error        { return nil }
-func (l *legacyVaultAdapter) IsUnlocked() bool                           { return l.vault != nil }
-func (l *legacyVaultAdapter) Close() error                               { return nil }
+func (l *legacyVaultAdapter) IsUnlocked() bool                           { return l != nil && l.vault != nil && !l.closed }
+func (l *legacyVaultAdapter) Close() error                               { if l != nil { l.closed = true; l.vault = nil }; return nil }
 
 func (l *legacyVaultAdapter) ListSecrets(context.Context) ([]domain.Secret, error) {
 	if l.vault == nil {
