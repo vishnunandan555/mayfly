@@ -14,6 +14,7 @@ import (
 
 	"mayfly/application"
 	"mayfly/domain"
+	"mayfly/executor"
 	"mayfly/project"
 	"mayfly/vault"
 )
@@ -34,7 +35,7 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 		}
 		return 0
 	}
-	if args[0] != "set" && args[0] != "get" && args[0] != "list" && args[0] != "delete" {
+	if args[0] != "set" && args[0] != "get" && args[0] != "list" && args[0] != "delete" && args[0] != "run" {
 		_, _ = fmt.Fprintf(errorOutput, "mayfly: unknown command %q\n", args[0])
 		usage(errorOutput)
 		return 2
@@ -44,16 +45,20 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 		_, _ = fmt.Fprintln(errorOutput, "mayfly:", err)
 		return 1
 	}
-	if err := runtime.execute(context.Background(), args, input, output, errorOutput); err != nil {
+	result, err := runtime.execute(context.Background(), args, input, output, errorOutput)
+	if err != nil {
 		_, _ = fmt.Fprintln(errorOutput, "mayfly:", err)
 		var usageErr usageError
 		if errors.As(err, &usageErr) {
 			usage(errorOutput)
 			return 2
 		}
+		if args[0] == "run" && result.ExitCode > 0 {
+			return result.ExitCode
+		}
 		return 1
 	}
-	return 0
+	return result.ExitCode
 }
 
 type commandRuntime struct {
@@ -75,43 +80,51 @@ func newRuntime() (*commandRuntime, error) {
 		return nil, err
 	}
 	return &commandRuntime{
-		service: application.NewService(application.Dependencies{Projects: registry, Vault: storage}),
+		service: application.NewService(application.Dependencies{
+			Projects: registry,
+			Vault:    storage,
+			Executor: executor.NewProcessExecutor(nil, nil, nil),
+		}),
 		storage: storage,
 	}, nil
 }
 
-func (r *commandRuntime) execute(ctx context.Context, args []string, input io.Reader, output, errorOutput io.Writer) error {
+func (r *commandRuntime) execute(ctx context.Context, args []string, input io.Reader, output, errorOutput io.Writer) (application.ExecutionResult, error) {
 	if r == nil || r.service == nil {
-		return application.ErrMissingSecrets
+		return application.ExecutionResult{}, application.ErrMissingSecrets
 	}
 	if len(args) == 0 {
-		return errorsWithUsage("command is required")
+		return application.ExecutionResult{}, errorsWithUsage("command is required")
 	}
 	reader := bufio.NewReader(input)
 	command := args[0]
 	var name domain.SecretName
 	if command == "list" {
 		if len(args) != 1 {
-			return errorsWithUsage("list takes no arguments")
+			return application.ExecutionResult{}, errorsWithUsage("list takes no arguments")
+		}
+	} else if command == "run" {
+		if len(args) < 2 || strings.TrimSpace(args[1]) == "" {
+			return application.ExecutionResult{}, errorsWithUsage("run requires a command")
 		}
 	} else {
 		if len(args) != 2 || strings.TrimSpace(args[1]) == "" {
-			return errorsWithUsage(command + " requires exactly one secret name")
+			return application.ExecutionResult{}, errorsWithUsage(command + " requires exactly one secret name")
 		}
 		name = domain.SecretName(args[1])
 		if err := name.Validate(); err != nil {
-			return application.ErrInvalidSecretName
+			return application.ExecutionResult{}, application.ErrInvalidSecretName
 		}
 	}
 	// Resolve the project before prompting or creating a vault. This prevents
 	// an uninitialized directory from causing any vault-side state change.
 	if _, err := r.service.CurrentProject(ctx); err != nil {
-		return err
+		return application.ExecutionResult{}, err
 	}
 
 	opened, err := r.open(ctx, reader, errorOutput, command == "set")
 	if err != nil {
-		return err
+		return application.ExecutionResult{}, err
 	}
 	defer func() { _ = opened.Close() }()
 
@@ -119,55 +132,61 @@ func (r *commandRuntime) execute(ctx context.Context, args []string, input io.Re
 	case "set":
 		value, err := readLine(reader, errorOutput, "Secret value: ")
 		if err != nil {
-			return err
+			return application.ExecutionResult{}, err
 		}
 		if err := opened.SetCurrentSecret(ctx, name, value); err != nil {
-			return err
+			return application.ExecutionResult{}, err
 		}
 		_, _ = fmt.Fprintf(output, "Set %s\n", name)
-		return nil
+		return application.ExecutionResult{}, nil
 	case "get":
 		material, err := opened.GetCurrentSecret(ctx, name)
 		if err != nil {
-			return err
+			return application.ExecutionResult{}, err
 		}
 		// get is the explicit value-bearing command. Close the session before
 		// writing the value, and do not include it in any status or error text.
 		if err := opened.Close(); err != nil {
-			return err
+			return application.ExecutionResult{}, err
 		}
 		_, err = fmt.Fprintln(output, material.Value)
-		return err
+		return application.ExecutionResult{}, err
 	case "list":
 		secrets, err := opened.ListCurrentSecrets(ctx)
 		if err != nil {
-			return err
+			return application.ExecutionResult{}, err
 		}
 		if err := opened.Close(); err != nil {
-			return err
+			return application.ExecutionResult{}, err
 		}
 		for _, secret := range secrets {
 			if _, err := fmt.Fprintln(output, secret.Name); err != nil {
-				return err
+				return application.ExecutionResult{}, err
 			}
 		}
-		return nil
+		return application.ExecutionResult{}, nil
 	case "delete":
 		answer, err := readLine(reader, errorOutput, "Delete secret? [y/N]: ")
 		if err != nil {
-			return err
+			return application.ExecutionResult{}, err
 		}
 		if !strings.EqualFold(strings.TrimSpace(answer), "y") {
 			_, _ = fmt.Fprintln(output, "Delete cancelled")
-			return nil
+			return application.ExecutionResult{}, nil
 		}
 		if err := opened.DeleteCurrentSecret(ctx, name); err != nil {
-			return err
+			return application.ExecutionResult{}, err
 		}
 		_, _ = fmt.Fprintf(output, "Deleted %s\n", name)
-		return nil
+		return application.ExecutionResult{}, nil
+	case "run":
+		project, err := opened.CurrentProject(ctx)
+		if err != nil {
+			return application.ExecutionResult{}, err
+		}
+		return opened.Run(ctx, domain.ExecutionRequest{ProjectID: project.ID, Command: append([]string(nil), args[1:]...)})
 	default:
-		return errorsWithUsage("unknown command")
+		return application.ExecutionResult{}, errorsWithUsage("unknown command")
 	}
 }
 
@@ -260,4 +279,5 @@ func usage(output io.Writer) {
 	_, _ = fmt.Fprintln(output, "  mayfly get <NAME>")
 	_, _ = fmt.Fprintln(output, "  mayfly list")
 	_, _ = fmt.Fprintln(output, "  mayfly delete <NAME>")
+	_, _ = fmt.Fprintln(output, "  mayfly run <COMMAND> [ARGS...]")
 }

@@ -23,7 +23,7 @@ You can't fully stop a malicious `postinstall` script from running. But you *can
 MayFly removes `.env` files from your project entirely. Your secrets live in one encrypted vault on your machine. When you want to run your app, you run it *through* MayFly instead of directly:
 
 ```
-mayfly npm run dev
+mayfly run npm run dev
 ```
 
 MayFly decrypts your secrets in memory only, injects them straight into the environment of that one process, and forgets them the moment the process stops. Nothing ever touches your project folder. Your code doesn't change — `process.env.API_KEY` still works exactly like before.
@@ -164,6 +164,29 @@ not provide a portable hidden terminal-input primitive. The TUI's raw input
 layer is separate and is not used by these commands yet. Do not place a
 password or secret in command arguments, logs, or debug output. This visible
 prompt is a documented usability limitation, not a claim of secure display.
+
+### Child-process execution
+
+Run a command with the current project's secrets using:
+
+```text
+mayfly run <COMMAND> [ARGS...]
+```
+
+MayFly passes the command and argument slice directly to `os/exec`; it does
+not invoke a shell, so spaces and Unicode remain argument data rather than
+being reparsed. The child's stdin, stdout, and stderr are connected to
+MayFly's corresponding process streams. The parent environment is inherited,
+except that a project secret with the same name explicitly overrides the
+inherited variable. No environment or `.env` file is written.
+
+Security boundary: a command that receives a secret can read it, print it,
+save it, or pass it to descendants. MayFly controls storage and injection,
+not the behavior of the command or its child processes. Values are loaded for
+the selected project in memory only and transient references are released
+after execution; Go's garbage collector does not guarantee cryptographic
+erasure of prior string storage. A child terminated by a Unix signal is
+reported using the conventional `128+signal` status where available.
 
 *(Full list with one-line rationale for each goes in `STDLIB.md` — this table is the preview.)*
 

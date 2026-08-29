@@ -63,6 +63,15 @@ type Environment []EnvironmentEntry
 
 func (Environment) String() string { return "[REDACTED ENVIRONMENT]" }
 
+// Clear releases references held by transient environment entries as soon as
+// the executor returns. Go's garbage collector does not guarantee erasure of
+// previously allocated string data, so this is reference cleanup only.
+func (e Environment) Clear() {
+	for index := range e {
+		e[index] = EnvironmentEntry{}
+	}
+}
+
 // ExecutionResult contains process outcome without retaining its environment.
 type ExecutionResult struct {
 	ExitCode int
@@ -358,6 +367,7 @@ func (s *Service) Run(ctx context.Context, request domain.ExecutionRequest) (Exe
 		environment = append(environment, EnvironmentEntry{Name: string(name), Value: material.Value})
 	}
 
+	defer environment.Clear()
 	result, err := s.executor.Execute(ctx, request, environment)
 	if s.auditor != nil {
 		auditErr := s.auditor.Record(ctx, domain.AuditEvent{

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -55,11 +56,24 @@ func (v commandTestVault) Open(context.Context, []byte) (application.SecretServi
 	return v.secrets, nil
 }
 
+type commandTestExecutor struct {
+	request domain.ExecutionRequest
+	env     application.Environment
+}
+
+func (e *commandTestExecutor) Execute(_ context.Context, request domain.ExecutionRequest, environment application.Environment) (application.ExecutionResult, error) {
+	e.request = request
+	e.env = append(application.Environment(nil), environment...)
+	return application.ExecutionResult{ExitCode: 0}, nil
+}
+
 func newCommandTestRuntime(secrets application.SecretService) *commandRuntime {
+	executor := &commandTestExecutor{}
 	return &commandRuntime{
 		service: application.NewService(application.Dependencies{
 			Projects: commandTestProjects{project: domain.Project{ID: "project-1", Name: "Demo"}},
 			Vault:    commandTestVault{secrets: secrets},
+			Executor: executor,
 		}),
 	}
 }
@@ -68,7 +82,7 @@ func TestExecuteSetUsesBufferedInputAndDoesNotPrintValue(t *testing.T) {
 	secrets := &commandTestSecrets{}
 	runtime := newCommandTestRuntime(secrets)
 	var output, errorOutput strings.Builder
-	err := runtime.execute(context.Background(), []string{"set", "TOKEN"}, strings.NewReader("master\nsecret-value\n"), &output, &errorOutput)
+	_, err := runtime.execute(context.Background(), []string{"set", "TOKEN"}, strings.NewReader("master\nsecret-value\n"), &output, &errorOutput)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +100,7 @@ func TestExecuteSetUsesBufferedInputAndDoesNotPrintValue(t *testing.T) {
 func TestExecuteGetIsExplicitValueOutput(t *testing.T) {
 	runtime := newCommandTestRuntime(&commandTestSecrets{material: domain.SecretMaterial{Name: "TOKEN", Value: "secret-value"}})
 	var output, errorOutput strings.Builder
-	if err := runtime.execute(context.Background(), []string{"get", "TOKEN"}, strings.NewReader("master\n"), &output, &errorOutput); err != nil {
+	if _, err := runtime.execute(context.Background(), []string{"get", "TOKEN"}, strings.NewReader("master\n"), &output, &errorOutput); err != nil {
 		t.Fatal(err)
 	}
 	if output.String() != "secret-value\n" {
@@ -101,18 +115,42 @@ func TestExecuteListNamesOnlyAndDeleteConfirmation(t *testing.T) {
 	secrets := &commandTestSecrets{material: domain.SecretMaterial{Name: "TOKEN", Value: "secret-value"}}
 	runtime := newCommandTestRuntime(secrets)
 	var listOutput, listErrors strings.Builder
-	if err := runtime.execute(context.Background(), []string{"list"}, strings.NewReader("master\n"), &listOutput, &listErrors); err != nil {
+	if _, err := runtime.execute(context.Background(), []string{"list"}, strings.NewReader("master\n"), &listOutput, &listErrors); err != nil {
 		t.Fatal(err)
 	}
 	if listOutput.String() != "TOKEN\n" || strings.Contains(listOutput.String(), "secret-value") {
 		t.Fatalf("list output = %q", listOutput.String())
 	}
 	var deleteOutput, deleteErrors strings.Builder
-	if err := runtime.execute(context.Background(), []string{"delete", "TOKEN"}, strings.NewReader("master\nn\n"), &deleteOutput, &deleteErrors); err != nil {
+	if _, err := runtime.execute(context.Background(), []string{"delete", "TOKEN"}, strings.NewReader("master\nn\n"), &deleteOutput, &deleteErrors); err != nil {
 		t.Fatal(err)
 	}
 	if len(secrets.deletes) != 0 || deleteOutput.String() != "Delete cancelled\n" {
 		t.Fatalf("delete cancellation = deletes %#v output %q", secrets.deletes, deleteOutput.String())
+	}
+}
+
+func TestExecuteRunDispatchesExactCommandAndDoesNotPrintEnvironment(t *testing.T) {
+	secrets := &commandTestSecrets{material: domain.SecretMaterial{Name: "TOKEN", Value: "secret-value"}}
+	executor := &commandTestExecutor{}
+	runtime := &commandRuntime{service: application.NewService(application.Dependencies{
+		Projects: commandTestProjects{project: domain.Project{ID: "project-1", Name: "Demo"}},
+		Vault:    commandTestVault{secrets: secrets},
+		Executor: executor,
+	})}
+	var output, errorOutput strings.Builder
+	result, err := runtime.execute(context.Background(), []string{"run", "program", "argument with spaces", "ユニコード"}, strings.NewReader("master\n"), &output, &errorOutput)
+	if err != nil || result.ExitCode != 0 {
+		t.Fatalf("run = %#v, %v", result, err)
+	}
+	if !reflect.DeepEqual(executor.request.Command, []string{"program", "argument with spaces", "ユニコード"}) {
+		t.Fatalf("command = %#v", executor.request.Command)
+	}
+	if len(executor.env) != 1 || executor.env[0].Value != "secret-value" {
+		t.Fatalf("environment = %#v", executor.env)
+	}
+	if strings.Contains(output.String(), "secret-value") || strings.Contains(errorOutput.String(), "secret-value") {
+		t.Fatal("run output leaked secret")
 	}
 }
 
