@@ -316,3 +316,14 @@ func TestContextCancellationAndClosedVault(t *testing.T) {
 		t.Fatalf("closed Get error = %v", err)
 	}
 }
+
+func FuzzParseHeader(f *testing.F) {
+	header := vaultHeader{version: formatVersion, kdf: kdfPBKDF2SHA256, iterations: 100000, salt: make([]byte, 32), nonce: make([]byte, 12)}
+	f.Add(header.marshal())
+	f.Add([]byte("MFVAUL\x01\x01\x00\x01\x86\xa0\x00\x20\x0c"))
+	f.Add([]byte("random corrupt data"))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		_, _, _ = parseHeader(data)
+	})
+}

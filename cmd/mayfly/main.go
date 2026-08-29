@@ -44,7 +44,7 @@ func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
 		usage(errorOutput)
 		return 2
 	}
-	runtime, err := newRuntime()
+	runtime, err := newRuntime(input, output, errorOutput)
 	if err != nil {
 		_, _ = fmt.Fprintln(errorOutput, "mayfly:", err)
 		return 1
@@ -71,7 +71,7 @@ type commandRuntime struct {
 	audit   *audit.Log
 }
 
-func newRuntime() (*commandRuntime, error) {
+func newRuntime(input io.Reader, output, errorOutput io.Writer) (*commandRuntime, error) {
 	registryPath, err := project.DefaultRegistryPath()
 	if err != nil {
 		return nil, err
@@ -100,7 +100,7 @@ func newRuntime() (*commandRuntime, error) {
 		service: application.NewService(application.Dependencies{
 			Projects: registry,
 			Vault:    storage,
-			Executor: executor.NewProcessExecutor(nil, nil, nil),
+			Executor: executor.NewProcessExecutor(input, output, errorOutput),
 			Auditor:  auditLog,
 			Scanner:  secretScanner,
 		}),

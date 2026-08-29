@@ -71,3 +71,17 @@ func TestScanFindingValidation(t *testing.T) {
 		t.Fatal("unknown scan severity was accepted")
 	}
 }
+
+func FuzzDomainValidation(f *testing.F) {
+	f.Add("project-1", "TOKEN_NAME", "secret value", "path/to/file")
+	f.Add("", " ", "val\x00bad", "bad\npath")
+	f.Add("proj", "KEY=VALUE", "val", "file.go")
+
+	f.Fuzz(func(t *testing.T, proj, name, val, path string) {
+		_ = (ProjectID(proj)).Validate()
+		_ = (Project{ID: ProjectID(proj), Name: proj, Path: path}).Validate()
+		_ = (SecretName(name)).Validate()
+		_ = (SecretInput{ProjectID: ProjectID(proj), Name: SecretName(name), Value: val}).Validate()
+		_ = (ScanFinding{Severity: SeverityWarning, Path: path, Category: "test", Message: val}).Validate()
+	})
+}
