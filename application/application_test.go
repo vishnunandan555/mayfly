@@ -65,6 +65,9 @@ func (f fakeProjects) Get(_ context.Context, id domain.ProjectID) (domain.Projec
 	}
 	return f.project, nil
 }
+func (f fakeProjects) Discover(context.Context, string) (domain.Project, error) {
+	return f.project, nil
+}
 
 type fakeVault struct{ secrets SecretService }
 

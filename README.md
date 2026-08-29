@@ -117,6 +117,27 @@ vault files are created with mode `0600` and newly created parent directories
 with mode `0700`. MayFly minimizes plaintext copies but Go's garbage collector
 does not provide a guarantee of cryptographic memory erasure.
 
+Project discovery is handled by the [`project`](project) package and the
+`mayfly init` command. MayFly resolves an existing directory to an absolute,
+clean path with symlinks evaluated, then records its identity in an external
+registry (`~/.mayfly/projects.json` by default). On Linux the deterministic
+project ID is derived from the directory's filesystem device/inode pair, so a
+rename or same-filesystem move keeps the project while deletion/recreation does
+not inherit its secrets. A symlink invocation resolves to the target project;
+copying a project to another filesystem creates a new identity. Commands from
+nested directories discover the nearest initialized ancestor. The registry is
+never created inside the project tree; use `-registry` for a safe external
+location when initializing a home-directory or other boundary-case root.
+
+Initialize the current project with the repository command:
+
+```bash
+go run ./cmd/mayfly init
+```
+
+Use `-path DIR` for another existing project directory and `-registry FILE`
+when an explicit external metadata location is required.
+
 *(Full list with one-line rationale for each goes in `STDLIB.md` — this table is the preview.)*
 
 ## Threat Model

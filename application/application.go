@@ -31,6 +31,7 @@ type VaultStorage interface {
 type ProjectLookup interface {
 	Current(ctx context.Context) (domain.Project, error)
 	Get(ctx context.Context, id domain.ProjectID) (domain.Project, error)
+	Discover(ctx context.Context, path string) (domain.Project, error)
 }
 
 // SecretService is the project-scoped secret operation boundary. List returns
@@ -156,6 +157,26 @@ func (s *Service) ListSecrets(ctx context.Context, projectID domain.ProjectID) (
 		return nil, ErrMissingSecrets
 	}
 	return s.secrets.List(ctx, projectID)
+}
+
+// DiscoverProject resolves a path to an initialized project without exposing
+// filesystem or registry details to callers such as the CLI or TUI.
+func (s *Service) DiscoverProject(ctx context.Context, path string) (domain.Project, error) {
+	if s == nil || s.projects == nil {
+		return domain.Project{}, ErrMissingProject
+	}
+	return s.projects.Discover(ctx, path)
+}
+
+// ListSecretsAt discovers the initialized project containing path, then lists
+// only that project's metadata. Secret isolation is enforced by carrying the
+// discovered ProjectID into the SecretService call.
+func (s *Service) ListSecretsAt(ctx context.Context, path string) ([]domain.Secret, error) {
+	project, err := s.DiscoverProject(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return s.ListSecrets(ctx, project.ID)
 }
 
 func (s *Service) SaveSecret(ctx context.Context, input domain.SecretInput) error {
