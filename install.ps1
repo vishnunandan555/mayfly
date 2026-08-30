@@ -16,10 +16,25 @@ $InstallDir = "$HOME\.local\bin"
 $VaultDir = "$HOME\.mayfly"
 
 if ($Uninstall) {
-    Write-Host "Uninstalling MayFly..." -ForegroundColor Yellow
+    Write-Host "=================================================" -ForegroundColor Yellow
+    Write-Host "  MayFly Windows Uninstaller" -ForegroundColor Yellow
+    Write-Host "=================================================" -ForegroundColor Yellow
+    Write-Host "This will remove mayfly.exe and mf.exe from your system.`n"
+    Write-Host "Options for encrypted vaults and data (~/.mayfly):"
+    Write-Host "  [y] - Fully remove everything (binaries + ~/.mayfly vaults)"
+    Write-Host "  [s] - Safe uninstall (remove binaries & PATH, keep ~/.mayfly vaults)"
+    Write-Host "  [n] - Cancel uninstallation`n"
+
+    $choice = (Read-Host "Choose an option [y/s/n]").ToLower()
+
+    if ($choice -eq "n") {
+        Write-Host "Uninstallation canceled."
+        exit 0
+    }
+
     Remove-Item "$InstallDir\mayfly.exe" -ErrorAction SilentlyContinue
     Remove-Item "$InstallDir\mf.exe" -ErrorAction SilentlyContinue
-    Write-Host "✓ Removed mayfly.exe and mf.exe binaries from $InstallDir" -ForegroundColor Green
+    Write-Host "✓ Removed mayfly.exe and mf.exe from $InstallDir" -ForegroundColor Green
 
     # Clean User PATH if it was added by MayFly
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -29,14 +44,14 @@ if ($Uninstall) {
         Write-Host "✓ Cleaned $InstallDir from User PATH." -ForegroundColor Green
     }
 
-    if (Test-Path $VaultDir) {
-        $resp = Read-Host "Do you want to permanently delete encrypted secrets in $VaultDir? (y/N)"
-        if ($resp -eq "y" -or $resp -eq "Y") {
-            Remove-Item -Recurse -Force $VaultDir
-            Write-Host "✓ Removed $VaultDir directory." -ForegroundColor Green
-        }
+    if ($choice -eq "y" -and (Test-Path $VaultDir)) {
+        Remove-Item -Recurse -Force $VaultDir
+        Write-Host "✓ Removed $VaultDir directory and all encrypted vaults." -ForegroundColor Green
+    } elseif ($choice -eq "s") {
+        Write-Host "✓ Kept $VaultDir intact for future use." -ForegroundColor Green
     }
-    Write-Host "MayFly has been completely and cleanly uninstalled from your system." -ForegroundColor Green
+
+    Write-Host "`nMayFly uninstallation complete." -ForegroundColor Green
     exit 0
 }
 

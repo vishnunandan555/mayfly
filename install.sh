@@ -34,37 +34,58 @@ done
 # UNINSTALL MODE
 # -------------------------------------------------------------
 if [ "$UNINSTALL" = true ]; then
-    echo "Uninstalling MayFly..."
-    
-    rm -f "${INSTALL_DIR}/mayfly"
-    rm -f "${INSTALL_DIR}/mf"
-    rm -f "/usr/local/bin/mayfly" 2>/dev/null || true
-    rm -f "/usr/local/bin/mf" 2>/dev/null || true
+    # If running piped via curl, reattach stdin to terminal
+    if [ ! -t 0 ] && [ -e /dev/tty ]; then
+        exec < /dev/tty
+    fi
 
-    echo "✓ Removed 'mayfly' and 'mf' binaries from ${INSTALL_DIR}"
+    echo "================================================="
+    echo "  MayFly Uninstaller"
+    echo "================================================="
+    echo "This will remove the 'mayfly' and 'mf' binaries from your system."
+    echo ""
+    echo "Options for encrypted vaults and data (~/.mayfly):"
+    echo "  [y] - Fully remove everything (binaries + ~/.mayfly vaults)"
+    echo "  [s] - Safe uninstall (remove binaries & PATH, keep ~/.mayfly vaults)"
+    echo "  [n] - Cancel uninstallation"
+    echo ""
+    read -p "Choose an option [y/s/n]: " -r CHOICE
+
+    case "$CHOICE" in
+        y|Y)
+            echo ""
+            echo "Removing MayFly binaries and encrypted vaults..."
+            rm -f "${INSTALL_DIR}/mayfly" "${INSTALL_DIR}/mf"
+            rm -f "/usr/local/bin/mayfly" "/usr/local/bin/mf" 2>/dev/null || true
+            rm -rf "${VAULT_DIR}"
+            echo "✓ Removed binaries from ${INSTALL_DIR}"
+            echo "✓ Removed ~/.mayfly directory and all encrypted vaults."
+            ;;
+        s|S)
+            echo ""
+            echo "Removing MayFly binaries (preserving ~/.mayfly)..."
+            rm -f "${INSTALL_DIR}/mayfly" "${INSTALL_DIR}/mf"
+            rm -f "/usr/local/bin/mayfly" "/usr/local/bin/mf" 2>/dev/null || true
+            echo "✓ Removed binaries from ${INSTALL_DIR}"
+            echo "✓ Preserved ~/.mayfly vaults for future use."
+            ;;
+        *)
+            echo "Uninstallation canceled."
+            exit 0
+            ;;
+    esac
 
     # Clean shell config PATH additions
     for rc in "${HOME}/.zshrc" "${HOME}/.bashrc" "${HOME}/.bash_profile" "${HOME}/.profile"; do
         if [ -f "$rc" ] && grep -q "Added by MayFly" "$rc"; then
-            # Cleanly remove the MayFly PATH block
             sed -i '/# Added by MayFly/d' "$rc" 2>/dev/null || sed -i '' '/# Added by MayFly/d' "$rc" 2>/dev/null || true
             sed -i '/export PATH=.*\.local\/bin/d' "$rc" 2>/dev/null || sed -i '' '/export PATH=.*\.local\/bin/d' "$rc" 2>/dev/null || true
             echo "✓ Cleaned PATH configuration from $(basename "$rc")"
         fi
     done
 
-    if [ -d "${VAULT_DIR}" ]; then
-        read -p "Do you want to permanently delete encrypted secrets in ~/.mayfly? [y/N]: " -r RESP
-        if [[ "$RESP" =~ ^[Yy]$ ]]; then
-            rm -rf "${VAULT_DIR}"
-            echo "✓ Removed ~/.mayfly directory."
-        else
-            echo "Kept ~/.mayfly intact for future use."
-        fi
-    fi
-
     echo ""
-    echo "MayFly has been completely and cleanly uninstalled from your system."
+    echo "MayFly uninstallation complete."
     exit 0
 fi
 
