@@ -5,6 +5,9 @@ bin/
 # Test Playground & Internal Reference Guides
 test_playground/
 guides/
+docs/node_modules/
+docs/.next/
+docs/dist/
 HANDOVER.md
 TESTING.md
 
