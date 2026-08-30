@@ -1,62 +1,83 @@
 ---
 title: Introduction
-description: Overview of MayFly, the zero-dependency local secrets manager that eliminates plaintext .env files.
+description: Zero-dependency, Go-only local secrets manager that eliminates plaintext .env files by storing secrets in an encrypted vault and injecting them directly into launched process memory.
+icon: Shield
 ---
 
-## Overview
+import { Lightbulb, Rocket, BookOpen, ShieldCheck, Terminal, Cpu } from 'lucide-react';
 
-**MayFly** is a lightweight, zero-dependency local secrets management utility designed to prevent credential exposure in developer workspaces.
+MayFly wraps any command in a secure execution context that injects credentials directly into child process memory, eliminating plaintext `.env` files from your code repositories. It is engineered to neutralize supply-chain credential theft during package installations (`npm install`, `pip install`, `cargo build`), CI runs, and developer workflows with a tamper-evident cryptographic audit trail.
 
-In modern software development, project environments frequently rely on `.env` files or local configuration trees containing unencrypted database credentials, private API keys, and access tokens. When package managers (`npm`, `pip`, `cargo`) execute installation hooks or developer scripts, arbitrary code runs with filesystem access to these plaintext files.
+Two things distinguish MayFly from traditional secrets managers:
 
-MayFly eliminates this attack surface by keeping secrets encrypted at rest in a local vault and injecting them directly into the target process's memory space upon execution.
+- **Zero disk footprint.** Decrypted secrets never touch physical disk storage. Credentials remain encrypted in binary format (`~/.mayfly/vault.enc`) until process execution, where they are decrypted strictly into volatile RAM and passed directly into the child process environment table.
+- **Host-native execution.** MayFly uses host OS execution primitives (`os/exec`) rather than intermediate shell wrappers (`/bin/sh -c`) or containers, ensuring your real build tools, real repository paths, and real local development workflows operate with zero overhead.
 
----
+```bash
+# Store secrets in authenticated encrypted vault (AES-256-GCM)
+mayfly set STRIPE_SECRET_KEY="sk_live_9a8b7c6d5e4f3a2b1c"
 
-## The Supply-Chain Threat Model
+# Inject secrets directly into process memory (no .env on disk)
+mayfly run npm run dev
 
-When dependencies are installed or build tasks are executed, untrusted code runs on the host machine. Real-world supply-chain attacks frequently execute the following steps:
-
-1. Traverse the current workspace and parent directories searching for `.env`, `.env.local`, and configuration files.
-2. Read plaintext tokens, cloud provider keys, and database connection strings.
-3. Exfiltrate stolen credentials over outbound network requests prior to the developer running the primary application.
-
-Preventing all third-party package hooks from running during builds is impractical in complex ecosystems. However, ensuring that **no plaintext secrets exist on disk** neutralizes local credential scanning attacks.
-
----
-
-## Architectural Principles
-
-MayFly is built on four core design principles:
-
-### 1. Zero Disk Residue
-Decrypted credentials never touch physical disk storage. Secrets remain encrypted in binary format (`~/.mayfly/vault.enc`) until process execution, where they are decrypted strictly into volatile RAM and passed directly into the child process environment table.
-
-### 2. Direct Process Execution
-MayFly does not execute commands via shell subshells (`/bin/sh -c` or `cmd.exe /c`). Instead, commands are launched directly via host operating system process primitives (`os/exec`), preventing shell history logging, environment variable leakage across subshells, and command interpolation vulnerabilities.
-
-### 3. Filesystem-Level Project Isolation
-Projects are identified using deterministic Linux filesystem attributes (`st_dev` + `st_ino`) combined with canonical path resolution. Secrets associated with Project A cannot be accessed or resolved by Project B.
-
-### 4. Zero External Dependencies
-MayFly is written entirely in Go using only the standard library (`crypto/aes`, `crypto/cipher`, `crypto/sha256`, `crypto/subtle`, `os/exec`, `syscall`). It has zero runtime third-party dependencies, making it completely resilient to upstream package hijacking.
+# Cryptographically verify the SHA-256 audit log
+mayfly audit verify
+```
 
 ---
 
-## Workflow Comparison
+## Start here
 
-### Traditional `.env` Workflow
-```
-[Disk: .env (Plaintext)] ---> [npm install / build (Untrusted Code Reads Disk)]
-                                     |
-                                     v
-                          [Credential Exfiltration]
-```
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 not-prose my-6">
+  <a
+    href="/docs/why-mayfly"
+    className="docs-card block rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5 hover:bg-neutral-900/80 transition-all text-decoration-none"
+  >
+    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-emerald-400">
+      <Lightbulb className="size-4.5" />
+    </div>
+    <h3 className="text-sm font-semibold text-neutral-100 mb-1">Why MayFly?</h3>
+    <p className="text-xs text-neutral-400 leading-relaxed">
+      The supply-chain problem MayFly solves, where it fits, and how it compares to .env and cloud vaults.
+    </p>
+  </a>
 
-### MayFly Workflow
-```
-[Encrypted Vault: ~/.mayfly/vault.enc]
-               |
-               v (In-Memory Decryption)
-[Target Process Memory Space] (No plaintext file on disk)
-```
+  <a
+    href="/docs/quickstart"
+    className="docs-card block rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5 hover:bg-neutral-900/80 transition-all text-decoration-none"
+  >
+    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-emerald-400">
+      <Rocket className="size-4.5" />
+    </div>
+    <h3 className="text-sm font-semibold text-neutral-100 mb-1">Quickstart</h3>
+    <p className="text-xs text-neutral-400 leading-relaxed">
+      Install MayFly, initialize a project vault, and execute your first application in under two minutes.
+    </p>
+  </a>
+
+  <a
+    href="/docs/concepts"
+    className="docs-card block rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5 hover:bg-neutral-900/80 transition-all text-decoration-none"
+  >
+    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-emerald-400">
+      <BookOpen className="size-4.5" />
+    </div>
+    <h3 className="text-sm font-semibold text-neutral-100 mb-1">Concepts</h3>
+    <p className="text-xs text-neutral-400 leading-relaxed">
+      Learn how Linux inode project identification, in-memory execution, and the audit hash-chain operate.
+    </p>
+  </a>
+
+  <a
+    href="/docs/architecture/security-model"
+    className="docs-card block rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5 hover:bg-neutral-900/80 transition-all text-decoration-none"
+  >
+    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-emerald-400">
+      <ShieldCheck className="size-4.5" />
+    </div>
+    <h3 className="text-sm font-semibold text-neutral-100 mb-1">Security Model</h3>
+    <p className="text-xs text-neutral-400 leading-relaxed">
+      Explore PBKDF2-HMAC-SHA256 key derivation, AES-256-GCM AEAD encryption, and memory safety guarantees.
+    </p>
+  </a>
+</div>

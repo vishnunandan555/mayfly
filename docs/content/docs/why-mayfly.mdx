@@ -1,0 +1,41 @@
+---
+title: Why MayFly?
+description: What problem MayFly solves, where it fits in modern engineering workflows, and how it compares to alternatives.
+icon: Lightbulb
+---
+
+## The Core Problem
+
+Almost every development workspace has a `.env` or `.env.local` file containing production credentials, database passwords, and third-party API keys in plaintext.
+
+When developers run commands like `npm install`, `pip install`, or `cargo build`, untrusted package install scripts execute with full user privileges. In real-world software supply-chain attacks, malicious packages scan local disk trees for `.env` files and exfiltrate secrets before the application even starts.
+
+---
+
+## Comparison Matrix
+
+| Feature | Plaintext `.env` | Doppler / 1Password CLI | HashiCorp Vault | MayFly |
+| :--- | :--- | :--- | :--- | :--- |
+| **Secrets on Disk** | Plaintext on disk | In-memory or env | In-memory | **0 plaintext on disk** |
+| **Network Requirement** | Offline | Cloud dependency | Network daemon | **100% Local / Offline** |
+| **External Dependencies** | Zero | Many (SDKs/APIs) | Client daemons | **0 Dependencies (Pure Go)** |
+| **Project Isolation** | Directory path | Workspace ID | Path policies | **Hardware Inode Isolation** |
+| **Audit Logging** | None | Cloud dashboard | Server log | **Tamper-Evident SHA-256 Chain** |
+| **Zero-Configuration TUI** | No | Web UI only | Web UI / CLI | **Built-in Pure Go TUI** |
+
+---
+
+## Where MayFly Fits
+
+MayFly is built for:
+- **Local Development**: Run `mayfly run npm run dev` without leaving credentials on your workstation disk.
+- **CI / Build Machines**: Inject build credentials into compilation steps without writing transient env files.
+- **Developer Workstations**: Prevent accidental commits of `.env` files into Git repositories.
+- **Supply-Chain Hardening**: Mitigate malicious npm/pip lifecycle scripts (`postinstall`) from exfiltrating credentials.
+
+---
+
+## What MayFly Does Not Try to Be
+
+- **A Team Secrets Synchronization Cloud**: MayFly does not sync credentials to third-party cloud servers over the internet. It is strictly a secure local workstation secrets manager.
+- **A Secret Rotation Daemon**: MayFly stores, protects, and injects your secrets locally. Automated remote token rotation should be managed via your cloud identity provider.

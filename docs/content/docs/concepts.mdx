@@ -1,0 +1,61 @@
+---
+title: Concepts
+description: Core architectural concepts behind MayFly's zero-disk secrets management, hardware inode isolation, and execution model.
+icon: BookOpen
+---
+
+## 1. Zero-Disk Secrets Lifecycle
+
+The fundamental promise of MayFly is that **decrypted plaintext secrets never touch physical storage media**.
+
+```
+[~/.mayfly/vault.enc]  <--- Encrypted at rest (AES-256-GCM)
+          │
+          │ User provides master password
+          ▼
+[MayFly Memory (RAM)]  <--- Transient PBKDF2 derivation & decryption
+          │
+          │ os/exec environment block injection
+          ▼
+[Target Process (RAM)] <--- Receives process.env / os.Environ() directly
+          │
+          │ Child process terminates
+          ▼
+[Memory Page Freed]    <--- Buffers zeroed, no disk trace remaining
+```
+
+Even if an attacker runs a disk-scanning script or inspects filesystem caches after execution, no unencrypted credential files exist.
+
+---
+
+## 2. Inode Project Binding
+
+Traditional tools often bind configurations to folder names (e.g. `my-app`). If you have two repositories with identical names in different directories (e.g. `/home/user/work/api` vs `/home/user/personal/api`), path collisions can cause accidental secret cross-contamination.
+
+MayFly eliminates this by resolving the **Linux filesystem device ID (`st_dev`) and inode number (`st_ino`)**:
+
+- Inode numbers are unique hardware identifiers assigned by the filesystem.
+- Symlinks and directory renames preserve the same underlying inode.
+- Secrets for Project A cannot be decrypted or mapped to Project B.
+
+---
+
+## 3. Direct Host Execution (`os/exec`)
+
+Instead of passing shell strings through `/bin/sh -c`, MayFly uses the Go standard library `os/exec.Command` primitive:
+
+- **Argument Preservation**: Arguments are passed as an exact string array without shell re-tokenization.
+- **History Protection**: Sensitive command arguments never appear in `~/.bash_history` or `~/.zsh_history`.
+- **Signal Forwarding**: Operating system signals like `SIGINT` (Ctrl+C) and `SIGTERM` are passed directly to the child process without intermediate shell trapping.
+
+---
+
+## 4. Tamper-Evident Hash Chain
+
+Every operation (vault initialization, key updates, secret injections, leak scans) creates an immutable audit entry linked by SHA-256 hashes:
+
+```text
+Hash[N] = SHA256(Hash[N-1] + ":" + Timestamp + ":" + Action + ":" + Data)
+```
+
+If any entry in `~/.mayfly/audit.log` is modified, deleted, or truncated, `mayfly audit verify` will detect the broken cryptographic link immediately.
