@@ -4,25 +4,41 @@ description: Zero-dependency, Go-only local secrets manager that eliminates plai
 icon: Shield
 ---
 
-import { Lightbulb, Rocket, BookOpen, ShieldCheck, Terminal, Cpu } from 'lucide-react';
+import { Lightbulb, Rocket, BookOpen, ShieldCheck, Terminal, Cpu, ArrowRight } from 'lucide-react';
 
 MayFly wraps any command in a secure execution context that injects credentials directly into child process memory, eliminating plaintext `.env` files from your code repositories. It is engineered to neutralize supply-chain credential theft during package installations (`npm install`, `pip install`, `cargo build`), CI runs, and developer workflows with a tamper-evident cryptographic audit trail.
 
-Two things distinguish MayFly from traditional secrets managers:
+---
 
-- **Zero disk footprint.** Decrypted secrets never touch physical disk storage. Credentials remain encrypted in binary format (`~/.mayfly/vault.enc`) until process execution, where they are decrypted strictly into volatile RAM and passed directly into the child process environment table.
-- **Host-native execution.** MayFly uses host OS execution primitives (`os/exec`) rather than intermediate shell wrappers (`/bin/sh -c`) or containers, ensuring your real build tools, real repository paths, and real local development workflows operate with zero overhead.
+## Core Principles
+
+Two engineering principles distinguish MayFly from traditional secrets managers:
+
+- **Zero disk footprint:** Decrypted secrets never touch physical disk storage. Credentials remain encrypted in binary format (`~/.mayfly/vault.enc`) until process execution, where they are decrypted strictly into volatile RAM and passed directly into the child process environment table.
+- **Host-native execution:** MayFly uses host OS execution primitives (`os/exec`) rather than intermediate shell wrappers (`/bin/sh -c`) or virtualized containers, ensuring your real build tools, real repository paths, and real local development workflows operate with zero overhead.
 
 ```bash
-# Store secrets in authenticated encrypted vault (AES-256-GCM)
-mayfly set STRIPE_SECRET_KEY="sk_live_9a8b7c6d5e4f3a2b1c"
+# 1. Store secrets in authenticated encrypted vault (AES-256-GCM)
+mf set STRIPE_SECRET_KEY="sk_live_9a8b7c6d5e4f3a2b1c"
 
-# Inject secrets directly into process memory (no .env on disk)
-mayfly run npm run dev
+# 2. Inject secrets directly into child process memory (no .env on disk)
+mf npm run dev
 
-# Cryptographically verify the SHA-256 audit log
-mayfly audit verify
+# 3. Cryptographically verify the SHA-256 audit log
+mf audit verify
 ```
+
+---
+
+## What MayFly Replaces
+
+| Old Vulnerable Workflow | The MayFly Secure Workflow |
+| :--- | :--- |
+| Storing `.env` or `.env.local` files on disk | Secrets encrypted at rest with AES-256-GCM in `~/.mayfly/vault.enc` |
+| `dotenv.config()` in application code | Zero code changes — standard `process.env` / `os.environ` works natively |
+| Malicious `npm postinstall` reading `.env` | Subprocesses receive secrets only when explicitly launched |
+| No visibility into credential reads | Tamper-evident SHA-256 hash chain logs every access and run event |
+| Cloud secret manager latency and rate limits | Single 100% offline static binary with zero external dependencies |
 
 ---
 
@@ -33,12 +49,12 @@ mayfly audit verify
     href="/docs/why-mayfly"
     className="docs-card block rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5 hover:bg-neutral-900/80 transition-all text-decoration-none"
   >
-    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-emerald-400">
+    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-amber-400">
       <Lightbulb className="size-4.5" />
     </div>
     <h3 className="text-sm font-semibold text-neutral-100 mb-1">Why MayFly?</h3>
     <p className="text-xs text-neutral-400 leading-relaxed">
-      The supply-chain problem MayFly solves, where it fits, and how it compares to .env and cloud vaults.
+      The supply-chain threat model MayFly addresses, where it fits, and how it compares to .env and cloud vaults.
     </p>
   </a>
 
@@ -46,7 +62,7 @@ mayfly audit verify
     href="/docs/quickstart"
     className="docs-card block rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5 hover:bg-neutral-900/80 transition-all text-decoration-none"
   >
-    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-emerald-400">
+    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-amber-400">
       <Rocket className="size-4.5" />
     </div>
     <h3 className="text-sm font-semibold text-neutral-100 mb-1">Quickstart</h3>
@@ -59,7 +75,7 @@ mayfly audit verify
     href="/docs/concepts"
     className="docs-card block rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5 hover:bg-neutral-900/80 transition-all text-decoration-none"
   >
-    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-emerald-400">
+    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-amber-400">
       <BookOpen className="size-4.5" />
     </div>
     <h3 className="text-sm font-semibold text-neutral-100 mb-1">Concepts</h3>
@@ -72,7 +88,7 @@ mayfly audit verify
     href="/docs/architecture/security-model"
     className="docs-card block rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5 hover:bg-neutral-900/80 transition-all text-decoration-none"
   >
-    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-emerald-400">
+    <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-amber-400">
       <ShieldCheck className="size-4.5" />
     </div>
     <h3 className="text-sm font-semibold text-neutral-100 mb-1">Security Model</h3>

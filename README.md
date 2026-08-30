@@ -79,31 +79,42 @@ mf c
 # 1. Initialize a project folder
 mf init
 
-# 2. Add an encrypted secret
-mf set STRIPE_KEY sk_live_123456
+# 2. Add an encrypted secret (interactive alt-screen prevents shell history leaks)
+mf set STRIPE_KEY
 
-# 3. Read a secret (clean stdout for piping)
-API_KEY=$(mf get STRIPE_KEY)
+# 3. Read a secret (to stdout or copy directly to clipboard)
+mf get STRIPE_KEY
+mf get STRIPE_KEY --clip
 
-# 4. List secret keys
+# 4. List secret keys (or structured JSON output)
 mf list
+mf list --json
 
-# 5. Run your app with secrets injected into RAM (no .env on disk)
+# 5. Bulk-import existing .env file into vault
+mf import .env
+
+# 6. Re-encrypt vault with new master password
+mf rotate-password
+
+# 7. Run your app with secrets injected into RAM (no .env on disk)
 mf run npm start
 mf run python app.py
 mf run go run main.go
 
-# 6. Scan codebase for accidental plaintext leaks
+# 8. Scan codebase for accidental plaintext leaks (.mayflyignore supported)
 mf scan
 
-# 7. Verify cryptographic audit trail
+# 9. Verify cryptographic audit trail
 mf audit verify
 
-# 8. Export/Import encrypted backups
+# 10. Shell autocompletions (bash, zsh, fish)
+source <(mf completion bash)
+
+# 11. Export/Import encrypted backups
 mf backup my-backup.json
 mf restore my-backup.json
 
-# 9. Migrate a project if its directory moves
+# 12. Migrate a project if its directory moves
 mf migrate /old/path /new/path
 ```
 
@@ -122,7 +133,7 @@ mayfly/
 │   ├── project/                # Inode & Volume file identity & project registry
 │   ├── executor/               # In-memory process execution & RAM zeroization
 │   ├── audit/                  # Cryptographic SHA-256 hash-chained audit log
-│   ├── scanner/                # Plaintext credential leak crawler
+│   ├── scanner/                # Plaintext credential leak crawler (.mayflyignore support)
 │   └── domain/                 # Core domain models & validation
 ├── install.sh                  # All-in-one installer (install, update, uninstall)
 ├── install.ps1                 # Windows PowerShell installer
@@ -133,15 +144,21 @@ See [STDLIB.md](STDLIB.md) for the complete 11-entry substitution matrix.
 
 ---
 
-## 🔒 Security Model & Limits
+## 🔒 Security Model & Operational Notes
 
 | Security Property | Implementation Details |
 |---|---|
-| **Encryption at Rest** | `AES-256-GCM` with random 12-byte nonces and 15-byte authenticated binary header AAD. |
+| **Encryption at Rest** | `AES-256-GCM` with random 12-byte nonces and 15-byte authenticated binary header AAD (`0600` permissions auto-enforced). |
 | **Key Derivation** | `RFC 8018 PBKDF2-HMAC-SHA256` running **600,000 iterations** with random 16-byte cryptographic salt. |
-| **Memory Isolation** | Decrypted values reside only in RAM during process execution. Memory buffers are zeroed on exit. |
+| **Password Echo Suppression** | Master password prompts use low-level `termios` (`TCSETS`/`ECHO` disabled) so keystrokes never appear on screen. |
+| **Ephemeral Alt-Screen Input** | `mf set` prompts in an ephemeral alternate screen buffer; secrets are visible for verification but vanish completely upon saving. |
+| **Memory Isolation & Auto-Lock** | Decrypted values reside only in RAM during process execution. Memory buffers are zeroed with `runtime.KeepAlive`. Vault auto-locks after 15 min idle. |
 | **Filesystem Isolation** | Binds project identity to physical storage `(Device, Inode)` to prevent path collision leaks. |
 | **Audit Integrity** | SHA-256 hash-chained log (`~/.mayfly/audit.log`) mathematically proves no log entries were altered or deleted. |
+
+> [!NOTE]
+> **CI & Automation Environment Variables:**  
+> The `MAYFLY_VAULT_PASSWORD` environment variable can be used in headless CI environments (e.g. GitHub Actions). For local interactive desktop development, avoid persisting `MAYFLY_VAULT_PASSWORD` into your `.bashrc`/`.zshrc` profile, as environment variables of running processes can be inspected via `/proc/<pid>/environ` by other processes running under the same user.
 
 ---
 

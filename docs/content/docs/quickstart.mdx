@@ -1,117 +1,153 @@
 ---
 title: Quickstart
-description: Install MayFly, initialize a project vault, store credentials, and execute commands with in-memory injection.
+description: Install MayFly and run your first zero-disk sandboxed command.
 icon: Rocket
 ---
 
-## Installation
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
 
-### Binary Installation (Linux & macOS)
+## Install
 
-To install MayFly using the automated installer:
+MayFly works on macOS and Linux (including WSL). Pick any method — it ships as a single static binary with zero external dependencies.
 
+<Tabs items={['curl', 'macOS', 'Linux', 'Go Install', 'From Source']}>
+  <Tab value="curl">
 ```bash
-curl -sSL https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.sh | bash
 ```
+  </Tab>
 
-### Windows (PowerShell)
-
-```powershell
-irm https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.ps1 | iex
+  <Tab value="macOS">
+```bash
+# macOS (Intel & Apple Silicon)
+curl -fsSL https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.sh | bash
 ```
+  </Tab>
 
-### Building from Source
+  <Tab value="Linux">
+```bash
+# Linux (All distributions & WSL)
+curl -fsSL https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.sh | bash
+```
+  </Tab>
 
-MayFly requires Go 1.22+ and uses only the Go standard library:
+  <Tab value="Go Install">
+```bash
+go install mayfly/cmd/mayfly@latest
+```
+  </Tab>
 
+  <Tab value="From Source">
 ```bash
 git clone https://github.com/vishnunandan555/mayfly.git
 cd mayfly
-go build -ldflags="-s -w" -o /usr/local/bin/mayfly ./cmd/mayfly
+./install.sh
 ```
+  </Tab>
+</Tabs>
 
 Verify the installation:
 
 ```bash
-mayfly version
+mf version
+# -> mayfly v1.0.0 (zero-dependency)
 ```
 
 ---
 
-## Basic Usage
+## Your First Sandboxed Command
 
-### 1. Initialize the Vault
+<Steps>
+<Step>
 
-Navigate to your project directory and initialize the encrypted storage:
+### 1. Initialize the Project Vault
+
+Navigate to your application directory and initialize the encrypted storage:
 
 ```bash
 cd /path/to/my-project
-mayfly init
+mf init
 ```
 
-You will be prompted to enter a master password. MayFly will derive a 256-bit AES key using PBKDF2-HMAC-SHA256 (600,000 iterations default) and initialize the vault structure.
+You will be prompted for a master password. MayFly derives a 256-bit AES key using PBKDF2-HMAC-SHA256 (600,000 iterations) and binds the vault to your hardware directory inode.
 
-### 2. Store Project Secrets
+</Step>
 
-Add environment variables to the project vault:
+<Step>
+
+### 2. Store Application Secrets
+
+Add environment variables to the project vault without writing any plaintext `.env` files:
 
 ```bash
-mayfly set DATABASE_URL="postgres://user:password@localhost:5432/app"
-mayfly set STRIPE_SECRET_KEY="sk_live_0123456789abcdef"
-mayfly set JWT_SECRET="super-secret-token"
+mf set DATABASE_URL="postgres://user:password@localhost:5432/app"
+mf set STRIPE_SECRET_KEY="sk_live_0123456789abcdef"
+mf set JWT_SECRET="super-secret-token"
 ```
 
-To set multiline or sensitive variables interactively without shell history logging:
+To list registered keys for the project:
 
 ```bash
-mayfly set --interactive API_KEY
+mf list
 ```
 
-### 3. List Registered Variables
+</Step>
 
-View the keys stored for the current project:
+<Step>
+
+### 3. Run Command with In-Memory Injection
+
+Execute any command directly using `mf` (or `mayfly`):
 
 ```bash
-mayfly list
+# Node.js / Next.js
+mf npm run dev
+
+# Python / FastAPI / Django
+mf python main.py
+
+# Docker Compose
+mf docker compose up -d
 ```
 
-Values are masked by default to prevent shoulder surfing and screen capture leakage.
+MayFly resolves the project identity, decrypts secrets into volatile RAM, and spawns the binary via direct `os/exec`. Unencrypted secrets never touch the filesystem.
 
-### 4. Execute Application via MayFly
+</Step>
 
-Run your application command using `mayfly run`:
+<Step>
+
+### 4. Verify Cryptographic Audit Trail
+
+Confirm that the access event was immutably recorded in the tamper-evident SHA-256 hash chain:
 
 ```bash
-mayfly run npm run dev
+mf audit verify
+# -> Audit log hash chain verified successfully.
 ```
 
-For Python applications:
+To inspect full chronological event history:
 
 ```bash
-mayfly run python main.py
+mf audit
 ```
 
-For Go or compiled binaries:
+</Step>
+</Steps>
 
-```bash
-mayfly run ./bin/server
-```
-
-MayFly will:
-1. Identify the current project.
-2. Prompt for your master password (or verify active session token).
-3. Decrypt the project secrets in memory.
-4. Pass the environment variables directly into the launched process.
-5. Exit cleanly when the child process terminates, zeroing memory references.
+<Callout type="info" title="Zero Disk Footprint">
+MayFly never writes an unencrypted file to disk. If your application or a third-party dependency inspects the filesystem for a <code>.env</code> file, none exists. Decrypted variables are only accessible in the child process memory table.
+</Callout>
 
 ---
 
-## Removing Existing Plaintext Files
+## Next Steps
 
-If your workspace previously contained `.env` files, remove them from disk:
+Explore language guides and architecture deep dives:
 
-```bash
-rm -f .env .env.local .env.production
-```
-
-Ensure `.env` files remain in `.gitignore` as a safeguard against accidental creation.
+- [Why MayFly?](/docs/why-mayfly) — Threat model and comparison with `.env` and cloud managers.
+- [Concepts](/docs/concepts) — Inode binding, memory safety, and audit hash chains.
+- [Node.js Guide](/docs/guides/nodejs) — Using MayFly with Next.js, Express, and npm scripts.
+- [Python Guide](/docs/guides/python) — Using MayFly with FastAPI, Django, and Flask.
+- [Security Model](/docs/architecture/security-model) — Cryptographic layout and AEAD implementation.

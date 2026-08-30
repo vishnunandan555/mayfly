@@ -1,5 +1,5 @@
 import { RootProvider } from 'fumadocs-ui/provider';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono, Instrument_Serif } from 'next/font/google';
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
 import './global.css';
@@ -16,6 +16,13 @@ const jetbrains = JetBrains_Mono({
   display: 'swap',
 });
 
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-serif',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: {
     template: '%s | MayFly Documentation',
@@ -28,7 +35,11 @@ export const metadata: Metadata = {
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrains.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrains.variable} ${instrumentSerif.variable}`}
+      suppressHydrationWarning
+    >
       <body className="flex min-h-screen flex-col bg-background font-sans antialiased">
         <RootProvider>{children}</RootProvider>
       </body>

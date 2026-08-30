@@ -7,10 +7,16 @@ icon: Settings
 ## Command Syntax
 
 ```bash
+# Direct process execution (recommended)
+mf <command> [arguments...]
+mayfly <command> [arguments...]
+
+# Built-in vault management commands
+mf [command] [flags] [arguments...]
 mayfly [command] [flags] [arguments...]
 ```
 
-MayFly can also be invoked via the `mf` alias if installed.
+> **Short Alias**: All commands work with `mf` as well as `mayfly`. Commands without a sub-command name automatically execute directly with in-memory secrets injection.
 
 ---
 
@@ -18,8 +24,9 @@ MayFly can also be invoked via the `mf` alias if installed.
 
 | Command | Description | Common Flags |
 | :--- | :--- | :--- |
+| `mf <command>` | Direct process execution with in-memory injection | e.g. `mf npm run dev`, `mf python main.py` |
 | [`mayfly init`](/docs/cli/vault#mayfly-init) | Initialize an encrypted vault for the current directory | `--iterations`, `--force` |
-| [`mayfly run`](/docs/cli/run) | Execute target command with in-memory secrets injection | `--isolated`, `--verbose` |
+| [`mayfly run`](/docs/cli/run) | Explicit process execution alias | `--isolated`, `--verbose` |
 | [`mayfly set`](/docs/cli/vault#mayfly-set) | Store or update an environment variable | `--interactive`, `--multiline` |
 | [`mayfly get`](/docs/cli/vault#mayfly-get) | Retrieve the plaintext value of a secret | `--unmask` |
 | [`mayfly list`](/docs/cli/vault#mayfly-list) | List registered keys in the current project vault | `--format=table\|json` |

@@ -66,19 +66,21 @@ type Project struct {
 type AuditAction string
 
 const (
-	ActionVaultInitialized AuditAction = "VAULT_INITIALIZED"
-	ActionVaultUnlocked    AuditAction = "VAULT_UNLOCKED"
-	ActionProjectInit      AuditAction = "PROJECT_INITIALIZED"
-	ActionProjectMigrated  AuditAction = "PROJECT_MIGRATED"
-	ActionProjectDeleted   AuditAction = "PROJECT_DELETED"
-	ActionSecretSet        AuditAction = "SECRET_SET"
-	ActionSecretGet        AuditAction = "SECRET_GET"
-	ActionSecretDeleted    AuditAction = "SECRET_DELETED"
-	ActionSecretInjected   AuditAction = "SECRET_INJECTED"
-	ActionCommandExited    AuditAction = "COMMAND_EXITED"
-	ActionScanCompleted    AuditAction = "SCAN_COMPLETED"
-	ActionBackupCreated    AuditAction = "BACKUP_CREATED"
-	ActionBackupRestored   AuditAction = "BACKUP_RESTORED"
+	ActionVaultInitialized     AuditAction = "VAULT_INITIALIZED"
+	ActionVaultUnlocked        AuditAction = "VAULT_UNLOCKED"
+	ActionVaultPasswordRotated AuditAction = "VAULT_PASSWORD_ROTATED"
+	ActionProjectInit          AuditAction = "PROJECT_INITIALIZED"
+	ActionProjectMigrated      AuditAction = "PROJECT_MIGRATED"
+	ActionProjectDeleted       AuditAction = "PROJECT_DELETED"
+	ActionSecretSet            AuditAction = "SECRET_SET"
+	ActionSecretGet            AuditAction = "SECRET_GET"
+	ActionSecretDeleted        AuditAction = "SECRET_DELETED"
+	ActionSecretImported       AuditAction = "SECRET_IMPORTED"
+	ActionSecretInjected       AuditAction = "SECRET_INJECTED"
+	ActionCommandExited        AuditAction = "COMMAND_EXITED"
+	ActionScanCompleted        AuditAction = "SCAN_COMPLETED"
+	ActionBackupCreated        AuditAction = "BACKUP_CREATED"
+	ActionBackupRestored       AuditAction = "BACKUP_RESTORED"
 )
 
 // AuditEvent represents a tamper-evident audit record.

@@ -7,6 +7,11 @@ icon: Terminal
 ## Synopsis
 
 ```bash
+# Recommended shorthand syntax:
+mf <command> [args...]
+mayfly <command> [args...]
+
+# Explicit execution alias:
 mayfly run [--isolated] [--] <command> [args...]
 ```
 
@@ -14,7 +19,7 @@ mayfly run [--isolated] [--] <command> [args...]
 
 ## Description
 
-The `run` command:
+MayFly executes child processes directly with in-memory secrets injection. You can run any command simply by prefixing it with `mf` or `mayfly` (or using the explicit `run` subcommand).
 1. Resolves the current project identity.
 2. Decrypts the project secrets into volatile memory.
 3. Merges existing system environment variables with the project secrets (project secrets take precedence).

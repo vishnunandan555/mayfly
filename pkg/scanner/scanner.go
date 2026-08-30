@@ -102,6 +102,8 @@ func (s *Scanner) Scan(ctx context.Context, rootDir string) ([]domain.ScanFindin
 		return nil, err
 	}
 
+	ignorePatterns := loadIgnorePatterns(filepath.Join(absRoot, ".mayflyignore"))
+
 	var findings []domain.ScanFinding
 
 	err = filepath.WalkDir(absRoot, func(path string, d os.DirEntry, walkErr error) error {
@@ -119,13 +121,13 @@ func (s *Scanner) Scan(ctx context.Context, rootDir string) ([]domain.ScanFindin
 		base := d.Name()
 
 		if d.IsDir() {
-			if defaultIgnoredDirs[base] || s.skipPaths[path] {
+			if defaultIgnoredDirs[base] || s.skipPaths[path] || isIgnored(relPath, base, true, ignorePatterns) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if s.skipPaths[path] {
+		if s.skipPaths[path] || isIgnored(relPath, base, false, ignorePatterns) {
 			return nil
 		}
 
@@ -209,3 +211,69 @@ func (s *Scanner) scanFile(fullPath, relPath string) ([]domain.ScanFinding, erro
 func errorsIsDone(err error) bool {
 	return err == context.Canceled || err == context.DeadlineExceeded
 }
+
+func loadIgnorePatterns(ignorePath string) []string {
+	data, err := os.ReadFile(ignorePath)
+	if err != nil {
+		return nil
+	}
+
+	var patterns []string
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		patterns = append(patterns, line)
+	}
+	return patterns
+}
+
+func isIgnored(relPath, base string, isDir bool, patterns []string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+
+	cleanRel := filepath.ToSlash(relPath)
+	cleanBase := base
+
+	for _, pat := range patterns {
+		pat = filepath.ToSlash(strings.TrimSpace(pat))
+		if pat == "" {
+			continue
+		}
+
+		// Directory-specific pattern (ends in /)
+		if strings.HasSuffix(pat, "/") {
+			dirPat := strings.TrimSuffix(pat, "/")
+			if isDir && (cleanBase == dirPat || cleanRel == dirPat || strings.HasPrefix(cleanRel, dirPat+"/")) {
+				return true
+			}
+			continue
+		}
+
+		// Direct name match
+		if cleanBase == pat || cleanRel == pat {
+			return true
+		}
+
+		// Path prefix match
+		if strings.HasPrefix(cleanRel, pat+"/") {
+			return true
+		}
+
+		// Glob pattern match against base name
+		if matched, _ := filepath.Match(pat, cleanBase); matched {
+			return true
+		}
+
+		// Glob pattern match against relative path
+		if matched, _ := filepath.Match(pat, cleanRel); matched {
+			return true
+		}
+	}
+
+	return false
+}
+

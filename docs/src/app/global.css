@@ -3,78 +3,114 @@
 @import 'fumadocs-ui/css/neutral.css';
 
 :root {
-  --color-fd-primary: hsl(158, 64%, 48%);
-  --color-fd-primary-foreground: hsl(0, 0%, 0%);
+  --color-fd-primary: #f59e0b;
+  --color-fd-primary-foreground: #000000;
   --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-jetbrains: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 }
 
+/* Professional dark charcoal / slate-graphite theme (NOT pitch black) */
 .dark {
-  --color-fd-background: #090b0a;
-  --color-fd-card: #0f1311;
-  --color-fd-secondary: #141a16;
-  --color-fd-popover: #0f1311;
-  --color-fd-border: rgba(255, 255, 255, 0.07);
-  --color-fd-primary: #10b981;
+  --color-fd-background: #0d100f;
+  --color-fd-card: #131715;
+  --color-fd-secondary: #171c1a;
+  --color-fd-popover: #131715;
+  --color-fd-border: rgba(255, 255, 255, 0.08);
+  --color-fd-primary: #f59e0b;
   --color-fd-primary-foreground: #000000;
-  --color-fd-accent: rgba(16, 185, 129, 0.1);
-  --color-fd-accent-foreground: #34d399;
-  --color-fd-muted-foreground: rgba(255, 255, 255, 0.5);
+  --color-fd-accent: rgba(245, 158, 11, 0.12);
+  --color-fd-accent-foreground: #fbbf24;
+  --color-fd-muted: #171c1a;
+  --color-fd-muted-foreground: rgba(255, 255, 255, 0.55);
 }
 
-/* Sidebar active nav item — emerald left border */
+.font-serif-display {
+  font-family: var(--font-serif), Georgia, Cambria, 'Times New Roman', Times, serif;
+}
+
+/* Sidebar styling — subtle contrast with rounded active pills */
+#nd-sidebar {
+  background-color: #0a0d0c;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Active navigation item — soft rounded pill like Fence */
 #nd-sidebar [data-active='true'] {
-  border-left: 2px solid #10b981;
-  background: rgba(16, 185, 129, 0.08);
-  color: #34d399;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border-radius: 0.5rem;
+  font-weight: 500;
 }
 
-/* Sidebar links — subtle emerald on hover */
+/* Sidebar link hover */
 #nd-sidebar a:not([data-active='true']):hover {
-  color: #d1fae5;
+  color: #fde68a;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0.5rem;
 }
 
-/* Inline code — emerald tinted */
+/* Inline code — warm gold tinted */
 .prose code:not(pre code) {
-  color: #6ee7b7;
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.15);
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.09);
+  border: 1px solid rgba(245, 158, 11, 0.18);
   border-radius: 4px;
   padding: 0.15em 0.4em;
   font-size: 0.875em;
 }
 
-/* Prose links — emerald */
+/* Prose links — warm amber */
 .prose a {
-  color: #34d399;
+  color: #fbbf24;
   text-decoration: none;
-  border-bottom: 1px solid rgba(52, 211, 153, 0.25);
+  border-bottom: 1px solid rgba(251, 191, 36, 0.3);
   transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .prose a:hover {
-  color: #6ee7b7;
-  border-bottom-color: rgba(110, 231, 183, 0.5);
+  color: #fde68a;
+  border-bottom-color: rgba(253, 230, 138, 0.7);
 }
 
-/* Heading anchor links — emerald on hover */
 .prose h2 a,
 .prose h3 a {
   border-bottom: none;
 }
 
-/* TOC active item */
+/* TOC active item & indicator */
 [data-active='true'] > a {
-  color: #34d399;
+  color: #fbbf24;
+  font-weight: 500;
 }
 
-/* Custom card hover */
+/* Table styling in docs */
+.prose table {
+  background-color: #111513;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.prose thead th {
+  background-color: rgba(255, 255, 255, 0.03);
+  color: #e5e5e5;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.prose tbody tr:not(:last-child) td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Custom cards styling */
 .docs-card {
+  background-color: #121614;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
   transition: all 0.2s ease;
 }
 
 .docs-card:hover {
-  border-color: rgba(16, 185, 129, 0.3);
-  background: rgba(16, 185, 129, 0.04);
+  border-color: rgba(245, 158, 11, 0.35);
+  background-color: #151a18;
   transform: translateY(-1px);
 }

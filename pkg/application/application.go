@@ -1,11 +1,14 @@
 package application
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
+	"time"
 
 	"mayfly/pkg/audit"
 	"mayfly/pkg/domain"
@@ -37,24 +40,47 @@ type Dependencies struct {
 
 // Service is the main orchestration layer.
 type Service struct {
-	mu           sync.RWMutex
-	projects     *project.Registry
-	vault        *vault.Storage
-	executor     *executor.ProcessExecutor
-	auditor      *audit.Log
-	scanner      *scanner.Scanner
-	activeSecret vault.StorageRecord
-	password     []byte
-	isUnlocked   bool
+	mu               sync.RWMutex
+	projects         *project.Registry
+	vault            *vault.Storage
+	executor         *executor.ProcessExecutor
+	auditor          *audit.Log
+	scanner          *scanner.Scanner
+	activeSecret     vault.StorageRecord
+	password         []byte
+	isUnlocked       bool
+	autoLockDuration time.Duration
+	autoLockTimer    *time.Timer
 }
 
 func NewService(deps Dependencies) *Service {
 	return &Service{
-		projects: deps.Projects,
-		vault:    deps.Vault,
-		executor: deps.Executor,
-		auditor:  deps.Auditor,
-		scanner:  deps.Scanner,
+		projects:         deps.Projects,
+		vault:            deps.Vault,
+		executor:         deps.Executor,
+		auditor:          deps.Auditor,
+		scanner:          deps.Scanner,
+		autoLockDuration: 15 * time.Minute,
+	}
+}
+
+// SetAutoLockTimeout configures the vault auto-lock idle timeout.
+func (s *Service) SetAutoLockTimeout(d time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.autoLockDuration = d
+	s.resetAutoLockLocked()
+}
+
+func (s *Service) resetAutoLockLocked() {
+	if s.autoLockTimer != nil {
+		s.autoLockTimer.Stop()
+		s.autoLockTimer = nil
+	}
+	if s.autoLockDuration > 0 && s.isUnlocked {
+		s.autoLockTimer = time.AfterFunc(s.autoLockDuration, func() {
+			s.LockVault()
+		})
 	}
 }
 
@@ -92,6 +118,7 @@ func (s *Service) InitializeVault(ctx context.Context, password []byte) error {
 	s.activeSecret = record
 	s.password = append([]byte(nil), password...)
 	s.isUnlocked = true
+	s.resetAutoLockLocked()
 
 	if s.auditor != nil {
 		_ = s.auditor.Record(ctx, domain.ActionVaultInitialized, "", "", "", nil)
@@ -117,6 +144,7 @@ func (s *Service) UnlockVault(ctx context.Context, password []byte) error {
 	s.activeSecret = record
 	s.password = append([]byte(nil), password...)
 	s.isUnlocked = true
+	s.resetAutoLockLocked()
 
 	if s.auditor != nil {
 		_ = s.auditor.Record(ctx, domain.ActionVaultUnlocked, "", "", "", nil)
@@ -129,6 +157,11 @@ func (s *Service) UnlockVault(ctx context.Context, password []byte) error {
 func (s *Service) LockVault() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.autoLockTimer != nil {
+		s.autoLockTimer.Stop()
+		s.autoLockTimer = nil
+	}
 
 	for i := range s.password {
 		s.password[i] = 0
@@ -304,6 +337,8 @@ func (s *Service) SetSecret(ctx context.Context, projectID string, name domain.S
 		return err
 	}
 
+	s.resetAutoLockLocked()
+
 	if s.auditor != nil {
 		_ = s.auditor.Record(ctx, domain.ActionSecretSet, projectID, string(name), "", nil)
 	}
@@ -334,11 +369,118 @@ func (s *Service) DeleteSecret(ctx context.Context, projectID string, name domai
 		return err
 	}
 
+	s.resetAutoLockLocked()
+
 	if s.auditor != nil {
 		_ = s.auditor.Record(ctx, domain.ActionSecretDeleted, projectID, string(name), "", nil)
 	}
 
 	return nil
+}
+
+// RotatePassword changes the master password of the encrypted vault and re-encrypts all data with a new salt.
+func (s *Service) RotatePassword(ctx context.Context, oldPassword, newPassword []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.vault == nil {
+		return ErrMissingVaultStorage
+	}
+
+	if len(newPassword) == 0 {
+		return errors.New("application: new password cannot be empty")
+	}
+
+	// Verify old password
+	record, err := s.vault.Open(oldPassword)
+	if err != nil {
+		return err
+	}
+
+	newPassCopy := append([]byte(nil), newPassword...)
+	if err := s.vault.Save(record, newPassCopy); err != nil {
+		return err
+	}
+
+	for i := range s.password {
+		s.password[i] = 0
+	}
+	runtime.KeepAlive(s.password)
+
+	s.activeSecret = record
+	s.password = newPassCopy
+	s.isUnlocked = true
+	s.resetAutoLockLocked()
+
+	if s.auditor != nil {
+		_ = s.auditor.Record(ctx, domain.ActionVaultPasswordRotated, "", "", "", nil)
+	}
+
+	return nil
+}
+
+// ImportEnv parses .env formatted content and sets secrets for the given project.
+func (s *Service) ImportEnv(ctx context.Context, projectID string, content string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.isUnlocked {
+		return 0, ErrVaultLocked
+	}
+
+	if s.activeSecret.Projects == nil {
+		s.activeSecret.Projects = make(map[string]map[domain.SecretName]string)
+	}
+	if _, ok := s.activeSecret.Projects[projectID]; !ok {
+		s.activeSecret.Projects[projectID] = make(map[domain.SecretName]string)
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	count := 0
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		line = strings.TrimPrefix(line, "export ")
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+
+		// Strip quotes
+		if (strings.HasPrefix(val, "\"") && strings.HasSuffix(val, "\"")) ||
+			(strings.HasPrefix(val, "'") && strings.HasSuffix(val, "'")) {
+			if len(val) >= 2 {
+				val = val[1 : len(val)-1]
+			}
+		}
+
+		secName := domain.SecretName(key)
+		if err := secName.Validate(); err != nil {
+			continue
+		}
+
+		s.activeSecret.Projects[projectID][secName] = val
+		count++
+	}
+
+	if count > 0 {
+		if err := s.vault.Save(s.activeSecret, s.password); err != nil {
+			return 0, err
+		}
+		if s.auditor != nil {
+			_ = s.auditor.Record(ctx, domain.ActionSecretImported, projectID, fmt.Sprintf("%d secrets", count), "", nil)
+		}
+	}
+
+	s.resetAutoLockLocked()
+	return count, nil
 }
 
 // Run executes a command with in-memory secret injection.

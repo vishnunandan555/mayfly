@@ -87,13 +87,22 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 		t.Fatalf("unexpected list output: %s", stdout)
 	}
 
-	// 5. Run command with injected secret
+	// 5. Run command with injected secret (explicit 'run')
 	code, stdout, stderr = executeMayfly(t, []string{"run", "sh", "-c", "echo DB=$DATABASE_URL"}, "masterpass\n", projDir)
 	if code != 0 {
 		t.Fatalf("run failed: code=%d, err=%s", code, stderr)
 	}
 	if !strings.Contains(stdout, "DB=postgres://localhost/db") {
 		t.Fatalf("unexpected run output: %s", stdout)
+	}
+
+	// 5b. Direct command execution without 'run' (e.g. 'mayfly <cmd>' / 'mf <cmd>')
+	code, stdout, stderr = executeMayfly(t, []string{"sh", "-c", "echo DIRECT_DB=$DATABASE_URL"}, "masterpass\n", projDir)
+	if code != 0 {
+		t.Fatalf("direct execution failed: code=%d, err=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "DIRECT_DB=postgres://localhost/db") {
+		t.Fatalf("unexpected direct execution output: %s", stdout)
 	}
 
 	// 6. Plaintext scanner
@@ -129,7 +138,53 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 		t.Fatalf("delete failed: code=%d, err=%s", code, stderr)
 	}
 
-	// 10. Version flag
+	// 10. Import .env file
+	envFile := filepath.Join(projDir, ".env")
+	if err := os.WriteFile(envFile, []byte("STRIPE_KEY=\"sk_live_1234567890\"\nexport REDIS_PORT=6379\n# comment\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr = executeMayfly(t, []string{"import", envFile}, "masterpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "Imported 2 secrets") {
+		t.Fatalf("import failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 11. List secrets as JSON
+	code, stdout, stderr = executeMayfly(t, []string{"list", "--json"}, "masterpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "STRIPE_KEY") || !strings.Contains(stdout, "REDIS_PORT") {
+		t.Fatalf("list --json failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 12. Get secret with --clip
+	code, stdout, stderr = executeMayfly(t, []string{"get", "STRIPE_KEY", "--clip"}, "masterpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "copied to clipboard") {
+		t.Fatalf("get --clip failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 13. Rotate Master Password
+	code, stdout, stderr = executeMayfly(t, []string{"rotate-password"}, "masterpass\nnewsecretpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "rotated successfully") {
+		t.Fatalf("rotate-password failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// Verify old password fails
+	code, _, _ = executeMayfly(t, []string{"list"}, "masterpass\n", projDir)
+	if code == 0 {
+		t.Fatalf("expected old password to fail after rotation")
+	}
+
+	// Verify new password succeeds
+	code, stdout, stderr = executeMayfly(t, []string{"list"}, "newsecretpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "STRIPE_KEY") {
+		t.Fatalf("list with new password failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 14. Shell completion
+	code, stdout, stderr = executeMayfly(t, []string{"completion", "bash"}, "", projDir)
+	if code != 0 || !strings.Contains(stdout, "_mayfly") {
+		t.Fatalf("completion bash failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 15. Version flag
 	code, stdout, stderr = executeMayfly(t, []string{"version"}, "", projDir)
 	if code != 0 || !strings.Contains(stdout, "mayfly v1.0.0") {
 		t.Fatalf("version failed: code=%d, err=%s, out=%s", code, stderr, stdout)

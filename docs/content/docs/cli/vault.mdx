@@ -1,6 +1,6 @@
 ---
 title: Vault Management Commands
-description: Reference for initializing, storing, reading, editing, and deleting vault secrets.
+description: Reference for initializing, storing, reading, editing, importing, and rotating vault secrets.
 icon: Lock
 ---
 
@@ -9,31 +9,28 @@ icon: Lock
 Initialize an encrypted vault container for the current directory.
 
 ```bash
-mayfly init [--iterations 600000]
+mayfly init [-path DIR]
 ```
-
-### Flags
-- `--iterations <count>`: Specify custom PBKDF2 iteration rounds (default: `600000`, minimum: `100000`).
 
 ---
 
 ## mayfly set
 
-Assign or update an environment variable in the current project vault.
+Assign or update an encrypted secret variable in the current project vault.
 
 ```bash
-mayfly set <KEY>=<VALUE>
+mayfly set <KEY>
 ```
 
-### Interactive Setting
+### Ephemeral Alt-Screen Entry (Recommended)
 
-To prevent values from being saved in shell history (`.bash_history` / `.zsh_history`):
-
-```bash
-mayfly set --interactive API_KEY
+When run without a value argument in an interactive terminal, MayFly opens a clean, ephemeral alternate terminal screen:
 ```
-
-You will be prompted to enter the secret value securely with echo disabled.
+  Enter value for STRIPE_KEY: █
+```
+- The secret is visible to you for instant visual verification of copy-pastes.
+- Pressing `Enter` immediately closes the screen and saves the secret to the encrypted vault.
+- Zero traces are left in terminal scroll-back or shell history files (`~/.bash_history` / `~/.zsh_history`).
 
 ---
 
@@ -42,62 +39,64 @@ You will be prompted to enter the secret value securely with echo disabled.
 Retrieve the decrypted value of a secret key.
 
 ```bash
-mayfly get <KEY> [--unmask]
+mayfly get <KEY> [--clip]
 ```
 
 ### Flags
-- `--unmask`: Output the raw plaintext string directly to stdout (useful for piping into tools).
+- `--clip` / `-c`: Copy the secret value directly to your system clipboard (using OSC 52, `pbcopy`, `wl-copy`, or `clip`) without printing plaintext to stdout or terminal scroll-back.
 
 ```bash
-mayfly get AWS_ACCESS_KEY_ID --unmask
+mayfly get STRIPE_SECRET_KEY --clip
 ```
 
 ---
 
 ## mayfly list
 
-List all secret variable keys registered in the project.
+List secret keys registered for the current project.
 
 ```bash
-mayfly list [--format=table|json]
+mayfly list [--json]
 ```
 
-### Example Output
-```
-PROJECT: /home/developer/Projects/api (Inode: 2050:1493028)
-TOTAL SECRETS: 3
-
-KEY                 VALUE MASKED         UPDATED
-------------------  -------------------  --------------------
-DATABASE_URL        postgres://••••••••  2026-08-31 03:45:12
-STRIPE_SECRET_KEY   sk_live_•••••••••••  2026-08-31 03:46:01
-REDIS_PASSWORD      •••••••••••••••••••  2026-08-31 03:47:20
-```
+### Flags
+- `--json`: Output secrets as structured JSON array for CI scripts and automation.
 
 ---
 
-## mayfly delete
+## mayfly import
 
-Remove one or all variables from the current project vault.
-
-```bash
-mayfly delete <KEY>
-```
-
-To remove all variables for the current project:
+Bulk-import existing `.env` files directly into your encrypted project vault.
 
 ```bash
-mayfly delete --all
+mayfly import [.env]
 ```
+
+Parses standard `.env` formats (handles comments, `export ` prefixes, single and double quotes) and registers all valid secrets into the vault.
 
 ---
 
-## mayfly ui
+## mayfly rotate-password
 
-Launch the full-screen terminal user interface (TUI) dashboard.
+Re-encrypt the entire vault under a new master password with a fresh random salt.
 
 ```bash
-mayfly ui
+mayfly rotate-password
 ```
 
-Provides an interactive keyboard-driven interface with secret editing, masking toggles, audit history viewer, and scan reports—built with zero third-party UI libraries.
+Prompts for your current master password (with echo suppressed), validates it, and re-encrypts all project credentials in memory before writing to disk.
+
+---
+
+## 🔒 Automated CI Environments & Warnings
+
+You can supply the master password non-interactively using the `MAYFLY_VAULT_PASSWORD` environment variable in headless CI pipelines (e.g., GitHub Actions, GitLab CI):
+
+```bash
+export MAYFLY_VAULT_PASSWORD="ci-vault-password"
+mayfly run npm test
+```
+
+> [!WARNING]
+> **Desktop Security Warning:** Do not store `MAYFLY_VAULT_PASSWORD` permanently in your interactive shell configuration (`~/.bashrc` / `~/.zshrc`). On Unix systems, process environment variables can be inspected by other processes owned by the same user via `/proc/<pid>/environ`. Use interactive prompts for local development.
+
