@@ -1,2 +1,0 @@
-track = "E"
-pitch = "A local secrets manager that never writes a plaintext .env to disk — encrypted vault, in-memory process injection, heuristic leak scanner, tamper-evident audit trail, and custom TUI, built with zero dependencies using only the Go 1.27 standard library."

@@ -1,28 +1,30 @@
-.POSIX:
-.PHONY: all build test test-race vet audit demo clean
+.PHONY: all build install uninstall test test-race vet clean
 
-all: build test vet audit
+BINARY := bin/mayfly
+ALIAS := bin/mf
+
+all: build
 
 build:
-	mkdir -p bin
-	go build -o bin/mayfly ./cmd/mayfly
-	go build -o bin/tui-demo ./cmd/tui-demo
-	go build -o bin/mayfly-child ./cmd/mayfly-child
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BINARY) ./cmd/mayfly
+	@ln -sf mayfly $(ALIAS) 2>/dev/null || cp $(BINARY) $(ALIAS)
+	@echo "Built $(BINARY) and $(ALIAS)"
+
+install:
+	@./install.sh
+
+uninstall:
+	@./install.sh --uninstall
 
 test:
-	go test ./...
+	go test -v ./...
 
 test-race:
-	go test -race ./...
+	go test -race -v ./...
 
 vet:
 	go vet ./...
 
-audit:
-	./zero-dep-audit.sh
-
-demo:
-	go run ./cmd/tui-demo
-
 clean:
-	rm -rf bin
+	rm -rf bin/

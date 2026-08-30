@@ -1,3 +1,20 @@
+# Build Binaries
+bin/
+*.exe
+
+# Test Playground & Internal Reference Guides
+test_playground/
+guides/
 HANDOVER.md
 TESTING.md
-bin/
+
+# Backups & Local Data
+*.json.bak
+mayfly-backup*.json
+.mayfly/
+
+# OS & Editor Artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*~

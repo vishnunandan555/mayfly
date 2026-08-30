@@ -1,4 +1,3 @@
-// mayfly is the application command-line entry point.
 package main
 
 import (
@@ -11,398 +10,474 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"mayfly"
-	"mayfly/application"
-	"mayfly/audit"
-	"mayfly/domain"
-	"mayfly/executor"
-	"mayfly/project"
-	"mayfly/scanner"
-	"mayfly/vault"
+	"mayfly/pkg/application"
+	"mayfly/pkg/audit"
+	"mayfly/pkg/domain"
+	"mayfly/pkg/executor"
+	"mayfly/pkg/project"
+	"mayfly/pkg/scanner"
+	"mayfly/pkg/tui"
+	"mayfly/pkg/vault"
 )
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+	code := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
+	os.Exit(code)
 }
 
-func run(args []string, input io.Reader, output, errorOutput io.Writer) int {
-	if len(args) == 0 {
-		usage(errorOutput)
-		return 2
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	ctx := context.Background()
+
+	// Initialize dependencies
+	reg, err := project.NewRegistry("")
+	if err != nil {
+		fmt.Fprintf(stderr, "mayfly: failed to initialize project registry: %v\n", err)
+		return 1
 	}
-	if args[0] == "init" {
-		if err := runInit(args[1:], output, errorOutput); err != nil {
-			_, _ = fmt.Fprintln(errorOutput, "mayfly init:", err)
+
+	storage, err := vault.NewStorage("", 0)
+	if err != nil {
+		fmt.Fprintf(stderr, "mayfly: failed to initialize vault storage: %v\n", err)
+		return 1
+	}
+
+	execEngine := executor.NewProcessExecutor(stdin, stdout, stderr)
+	auditLog, _ := audit.New("")
+	leakScanner, _ := scanner.New(scanner.Options{})
+
+	svc := application.NewService(application.Dependencies{
+		Projects: reg,
+		Vault:    storage,
+		Executor: execEngine,
+		Auditor:  auditLog,
+		Scanner:  leakScanner,
+	})
+
+	// 1. If no args provided, launch Global TUI directly!
+	if len(args) == 0 {
+		if err := tui.Run(svc, tui.Options{}); err != nil {
+			fmt.Fprintf(stderr, "mayfly: tui error: %v\n", err)
 			return 1
 		}
 		return 0
 	}
-	if args[0] != "set" && args[0] != "get" && args[0] != "list" && args[0] != "delete" && args[0] != "run" && args[0] != "audit" && args[0] != "scan" && args[0] != "tui" {
-		_, _ = fmt.Fprintf(errorOutput, "mayfly: unknown command %q\n", args[0])
-		usage(errorOutput)
-		return 2
-	}
-	runtime, err := newRuntime(input, output, errorOutput)
-	if err != nil {
-		_, _ = fmt.Fprintln(errorOutput, "mayfly:", err)
-		return 1
-	}
-	result, err := runtime.execute(context.Background(), args, input, output, errorOutput)
-	if err != nil {
-		_, _ = fmt.Fprintln(errorOutput, "mayfly:", err)
-		var usageErr usageError
-		if errors.As(err, &usageErr) {
-			usage(errorOutput)
+
+	subcmd := args[0]
+	subArgs := args[1:]
+
+	switch subcmd {
+	case "help", "-h", "--help":
+		printUsage(stdout)
+		return 0
+
+	case "c", "current":
+		// Launch Project-Scoped TUI
+		cwd, _ := os.Getwd()
+		proj, err := svc.ResolveCurrentProject(cwd)
+		opts := tui.Options{CurrentDir: cwd}
+		if err == nil {
+			opts.ProjectScoped = &proj
+		}
+		if err := tui.Run(svc, opts); err != nil {
+			fmt.Fprintf(stderr, "mayfly: tui error: %v\n", err)
+			return 1
+		}
+		return 0
+
+	case "tui":
+		cwd, _ := os.Getwd()
+		opts := tui.Options{CurrentDir: cwd}
+		if proj, err := svc.ResolveCurrentProject(cwd); err == nil {
+			opts.ProjectScoped = &proj
+		}
+		if err := tui.Run(svc, opts); err != nil {
+			fmt.Fprintf(stderr, "mayfly: tui error: %v\n", err)
+			return 1
+		}
+		return 0
+
+	case "init":
+		fs := flag.NewFlagSet("init", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		targetPath := fs.String("path", ".", "Target project directory to register")
+		if err := fs.Parse(subArgs); err != nil {
 			return 2
 		}
-		if args[0] == "run" && result.ExitCode > 0 {
-			return result.ExitCode
-		}
-		return 1
-	}
-	return result.ExitCode
-}
 
-type commandRuntime struct {
-	service *application.Service
-	storage *vault.Storage
-	audit   *audit.Log
-}
-
-func newRuntime(input io.Reader, output, errorOutput io.Writer) (*commandRuntime, error) {
-	registryPath, err := project.DefaultRegistryPath()
-	if err != nil {
-		return nil, err
-	}
-	registry, err := project.NewRegistry(registryPath)
-	if err != nil {
-		return nil, err
-	}
-	storage, err := vault.NewStorage(filepath.Join(filepath.Dir(registryPath), "vault.enc"), vault.Options{})
-	if err != nil {
-		return nil, err
-	}
-	auditPath, err := audit.DefaultPath()
-	if err != nil {
-		return nil, err
-	}
-	auditLog, err := audit.New(auditPath)
-	if err != nil {
-		return nil, err
-	}
-	secretScanner, err := scanner.New(scanner.Options{SkipPaths: []string{storage.Path(), auditLog.Path()}})
-	if err != nil {
-		return nil, err
-	}
-	return &commandRuntime{
-		service: application.NewService(application.Dependencies{
-			Projects: registry,
-			Vault:    storage,
-			Executor: executor.NewProcessExecutor(input, output, errorOutput),
-			Auditor:  auditLog,
-			Scanner:  secretScanner,
-		}),
-		storage: storage,
-		audit:   auditLog,
-	}, nil
-}
-
-func (r *commandRuntime) execute(ctx context.Context, args []string, input io.Reader, output, errorOutput io.Writer) (application.ExecutionResult, error) {
-	if r == nil || r.service == nil {
-		return application.ExecutionResult{}, application.ErrMissingSecrets
-	}
-	if len(args) == 0 {
-		return application.ExecutionResult{}, errorsWithUsage("command is required")
-	}
-	reader := bufio.NewReader(input)
-	command := args[0]
-	if command == "tui" {
-		if len(args) != 1 {
-			return application.ExecutionResult{}, errorsWithUsage("tui takes no arguments")
-		}
-		screenService := application.NewScreenService(r.service)
-		screens := mayfly.NewScreens(screenService)
-		if inputFile, ok := input.(*os.File); ok {
-			if err := screens.RunIO(inputFile, output); err != nil {
-				return application.ExecutionResult{}, err
-			}
-			return application.ExecutionResult{}, nil
-		}
-		return application.ExecutionResult{}, errors.New("tui requires an interactive terminal input")
-	}
-	if command == "audit" {
-		return r.executeAudit(ctx, args, output)
-	}
-	if command == "scan" {
-		if len(args) != 1 {
-			return application.ExecutionResult{}, errorsWithUsage("scan takes no arguments")
-		}
-		findings, err := r.service.ScanCurrentProject(ctx)
+		proj, err := svc.RegisterProject(ctx, *targetPath)
 		if err != nil {
-			return application.ExecutionResult{}, err
+			fmt.Fprintf(stderr, "mayfly: init failed: %v\n", err)
+			return 1
 		}
-		for _, finding := range findings {
-			if _, err := fmt.Fprintf(output, "%s", finding.Path); err != nil {
-				return application.ExecutionResult{}, err
-			}
-			if finding.Line > 0 {
-				if _, err := fmt.Fprintf(output, ":%d:%d", finding.Line, finding.Column); err != nil {
-					return application.ExecutionResult{}, err
-				}
-			}
-			if _, err := fmt.Fprintf(output, ": %s [%s] %s\n", finding.Severity, finding.Category, finding.Message); err != nil {
-				return application.ExecutionResult{}, err
-			}
-		}
-		if len(findings) > 0 {
-			return application.ExecutionResult{ExitCode: 3}, nil
-		}
-		return application.ExecutionResult{}, nil
-	}
-	var name domain.SecretName
-	if command == "list" {
-		if len(args) != 1 {
-			return application.ExecutionResult{}, errorsWithUsage("list takes no arguments")
-		}
-	} else if command == "run" {
-		if len(args) < 2 || strings.TrimSpace(args[1]) == "" {
-			return application.ExecutionResult{}, errorsWithUsage("run requires a command")
-		}
-	} else {
-		if len(args) != 2 || strings.TrimSpace(args[1]) == "" {
-			return application.ExecutionResult{}, errorsWithUsage(command + " requires exactly one secret name")
-		}
-		name = domain.SecretName(args[1])
-		if err := name.Validate(); err != nil {
-			return application.ExecutionResult{}, application.ErrInvalidSecretName
-		}
-	}
-	// Resolve the project before prompting or creating a vault. This prevents
-	// an uninitialized directory from causing any vault-side state change.
-	if _, err := r.service.CurrentProject(ctx); err != nil {
-		return application.ExecutionResult{}, err
-	}
 
-	opened, err := r.open(ctx, reader, errorOutput, command == "set")
-	if err != nil {
-		return application.ExecutionResult{}, err
-	}
-	defer func() { _ = opened.Close() }()
+		fmt.Fprintf(stdout, "Initialized project in %s\nProject ID: %s\n", proj.CanonicalPath, proj.ID)
+		return 0
 
-	switch command {
 	case "set":
-		value, err := readLine(reader, errorOutput, "Secret value: ")
+		if len(subArgs) < 1 {
+			fmt.Fprintln(stderr, "usage: mayfly set <NAME> [VALUE]")
+			return 2
+		}
+		secName := domain.SecretName(subArgs[0])
+		if err := secName.Validate(); err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
+		}
+
+		cwd, _ := os.Getwd()
+		proj, err := svc.ResolveCurrentProject(cwd)
 		if err != nil {
-			return application.ExecutionResult{}, err
+			fmt.Fprintf(stderr, "mayfly: current directory is not an initialized project (run 'mayfly init' first)\n")
+			return 1
 		}
-		if err := opened.SetCurrentSecret(ctx, name, value); err != nil {
-			return application.ExecutionResult{}, err
+
+		// Read password
+		password, err := getMasterPassword(svc, stdin, stdout, stderr)
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
 		}
-		_, _ = fmt.Fprintf(output, "Set %s\n", name)
-		return application.ExecutionResult{}, nil
+
+		// Read secret value
+		var val string
+		if len(subArgs) >= 2 {
+			val = strings.Join(subArgs[1:], " ")
+		} else {
+			fmt.Fprintf(stdout, "Enter value for %s: ", secName)
+			val, err = readLine(stdin)
+			if err != nil {
+				fmt.Fprintf(stderr, "mayfly: failed to read secret value: %v\n", err)
+				return 1
+			}
+		}
+
+		if err := svc.UnlockVault(ctx, password); err != nil {
+			fmt.Fprintf(stderr, "mayfly: failed to unlock vault: %v\n", err)
+			return 1
+		}
+
+		if err := svc.SetSecret(ctx, proj.ID, secName, val); err != nil {
+			fmt.Fprintf(stderr, "mayfly: failed to save secret: %v\n", err)
+			return 1
+		}
+
+		fmt.Fprintf(stdout, "Secret %s set for project %s\n", secName, proj.ID)
+		return 0
+
 	case "get":
-		material, err := opened.GetCurrentSecret(ctx, name)
+		if len(subArgs) < 1 {
+			fmt.Fprintln(stderr, "usage: mayfly get <NAME>")
+			return 2
+		}
+		secName := domain.SecretName(subArgs[0])
+
+		cwd, _ := os.Getwd()
+		proj, err := svc.ResolveCurrentProject(cwd)
 		if err != nil {
-			return application.ExecutionResult{}, err
+			fmt.Fprintf(stderr, "mayfly: current directory is not an initialized project\n")
+			return 1
 		}
-		// get is the explicit value-bearing command. Close the session before
-		// writing the value, and do not include it in any status or error text.
-		if err := opened.Close(); err != nil {
-			return application.ExecutionResult{}, err
+
+		password, err := getMasterPassword(svc, stdin, stdout, stderr)
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
 		}
-		_, err = fmt.Fprintln(output, material.Value)
-		return application.ExecutionResult{}, err
+
+		if err := svc.UnlockVault(ctx, password); err != nil {
+			fmt.Fprintf(stderr, "mayfly: failed to unlock vault: %v\n", err)
+			return 1
+		}
+
+		val, err := svc.GetSecret(ctx, proj.ID, secName)
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
+		}
+
+		fmt.Fprintln(stdout, val)
+		return 0
+
 	case "list":
-		secrets, err := opened.ListCurrentSecrets(ctx)
+		cwd, _ := os.Getwd()
+		proj, err := svc.ResolveCurrentProject(cwd)
 		if err != nil {
-			return application.ExecutionResult{}, err
+			fmt.Fprintf(stderr, "mayfly: current directory is not an initialized project\n")
+			return 1
 		}
-		if err := opened.Close(); err != nil {
-			return application.ExecutionResult{}, err
+
+		password, err := getMasterPassword(svc, stdin, stdout, stderr)
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
 		}
-		for _, secret := range secrets {
-			if _, err := fmt.Fprintln(output, secret.Name); err != nil {
-				return application.ExecutionResult{}, err
-			}
+
+		if err := svc.UnlockVault(ctx, password); err != nil {
+			fmt.Fprintf(stderr, "mayfly: failed to unlock vault: %v\n", err)
+			return 1
 		}
-		return application.ExecutionResult{}, nil
+
+		list, err := svc.ListSecrets(proj.ID)
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
+		}
+
+		if len(list) == 0 {
+			fmt.Fprintln(stdout, "No secrets configured for this project.")
+			return 0
+		}
+
+		for _, s := range list {
+			fmt.Fprintln(stdout, s.Name)
+		}
+		return 0
+
 	case "delete":
-		answer, err := readLine(reader, errorOutput, "Delete secret? [y/N]: ")
+		if len(subArgs) < 1 {
+			fmt.Fprintln(stderr, "usage: mayfly delete <NAME>")
+			return 2
+		}
+		secName := domain.SecretName(subArgs[0])
+
+		cwd, _ := os.Getwd()
+		proj, err := svc.ResolveCurrentProject(cwd)
 		if err != nil {
-			return application.ExecutionResult{}, err
+			fmt.Fprintf(stderr, "mayfly: current directory is not an initialized project\n")
+			return 1
 		}
-		if !strings.EqualFold(strings.TrimSpace(answer), "y") {
-			_, _ = fmt.Fprintln(output, "Delete cancelled")
-			return application.ExecutionResult{}, nil
+
+		password, err := getMasterPassword(svc, stdin, stdout, stderr)
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
 		}
-		if err := opened.DeleteCurrentSecret(ctx, name); err != nil {
-			return application.ExecutionResult{}, err
+
+		if err := svc.UnlockVault(ctx, password); err != nil {
+			fmt.Fprintf(stderr, "mayfly: failed to unlock vault: %v\n", err)
+			return 1
 		}
-		_, _ = fmt.Fprintf(output, "Deleted %s\n", name)
-		return application.ExecutionResult{}, nil
+
+		if err := svc.DeleteSecret(ctx, proj.ID, secName); err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
+		}
+
+		fmt.Fprintf(stdout, "Deleted secret %s from project %s\n", secName, proj.ID)
+		return 0
+
 	case "run":
-		project, err := opened.CurrentProject(ctx)
-		if err != nil {
-			return application.ExecutionResult{}, err
+		if len(subArgs) < 1 {
+			fmt.Fprintln(stderr, "usage: mayfly run <COMMAND> [ARGS...]")
+			return 2
 		}
-		return opened.Run(ctx, domain.ExecutionRequest{ProjectID: project.ID, Command: append([]string(nil), args[1:]...)})
+
+		cwd, _ := os.Getwd()
+		proj, err := svc.ResolveCurrentProject(cwd)
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: current directory is not an initialized project (run 'mayfly init' first)\n")
+			return 1
+		}
+
+		password, err := getMasterPassword(svc, stdin, stdout, stderr)
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
+		}
+
+		if err := svc.UnlockVault(ctx, password); err != nil {
+			fmt.Fprintf(stderr, "mayfly: failed to unlock vault: %v\n", err)
+			return 1
+		}
+
+		req := domain.ExecutionRequest{
+			ProjectID: proj.ID,
+			Command:   subArgs,
+			Dir:       cwd,
+		}
+
+		res, err := svc.Run(ctx, req)
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: execution error: %v\n", err)
+			return res.ExitCode
+		}
+		return res.ExitCode
+
+	case "scan":
+		targetDir := "."
+		if len(subArgs) >= 1 {
+			targetDir = subArgs[0]
+		}
+
+		findings, err := svc.Scan(ctx, targetDir)
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: scan failed: %v\n", err)
+			return 1
+		}
+
+		if len(findings) == 0 {
+			fmt.Fprintln(stdout, "No plaintext credentials or .env files detected.")
+			return 0
+		}
+
+		for _, f := range findings {
+			fmt.Fprintf(stdout, "%s:%d:%d: [%s] %s (%s)\n", f.Path, f.Line, f.Column, f.Severity, f.Message, f.Category)
+		}
+		return 0
+
+	case "audit":
+		if len(subArgs) >= 1 && subArgs[0] == "verify" {
+			if err := svc.VerifyAudit(ctx); err != nil {
+				fmt.Fprintf(stderr, "mayfly: audit log verification FAILED: %v\n", err)
+				return 1
+			}
+			fmt.Fprintln(stdout, "Audit log hash chain verified successfully.")
+			return 0
+		}
+
+		events, err := svc.AuditTrail(ctx)
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: failed to read audit trail: %v\n", err)
+			return 1
+		}
+
+		for _, ev := range events {
+			fmt.Fprintf(stdout, "#%d %s %s project=%s secret=%s hash=%s\n",
+				ev.Sequence, ev.At.Format("2006-01-02T15:04:05Z07:00"), ev.Action, ev.ProjectID, ev.Secret, ev.Hash[:12])
+		}
+		return 0
+
+	case "backup":
+		targetFile := "mayfly-backup.json"
+		if len(subArgs) >= 1 {
+			targetFile = subArgs[0]
+		}
+		if err := svc.ExportBackup(ctx, targetFile); err != nil {
+			fmt.Fprintf(stderr, "mayfly: backup failed: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "Encrypted vault backup exported to %s\n", targetFile)
+		return 0
+
+	case "restore":
+		if len(subArgs) < 1 {
+			fmt.Fprintln(stderr, "usage: mayfly restore <BACKUP_FILE>")
+			return 2
+		}
+		if err := svc.RestoreBackup(ctx, subArgs[0]); err != nil {
+			fmt.Fprintf(stderr, "mayfly: restore failed: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "Vault and projects restored from %s\n", subArgs[0])
+		return 0
+
+	case "migrate":
+		if len(subArgs) < 2 {
+			fmt.Fprintln(stderr, "usage: mayfly migrate <OLD_PATH> <NEW_PATH>")
+			return 2
+		}
+		oldP, newP, err := svc.MigrateProject(ctx, subArgs[0], subArgs[1])
+		if err != nil {
+			fmt.Fprintf(stderr, "mayfly: migration failed: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "Migrated project %s (%s) -> %s (%s)\n", oldP.ID, oldP.CanonicalPath, newP.ID, newP.CanonicalPath)
+		return 0
+
+	case "uninstall":
+		fmt.Fprint(stdout, "Are you sure you want to uninstall MayFly? [y/N]: ")
+		resp, _ := readLine(stdin)
+		if strings.ToLower(strings.TrimSpace(resp)) != "y" {
+			fmt.Fprintln(stdout, "Uninstall canceled.")
+			return 0
+		}
+
+		home, _ := os.UserHomeDir()
+		binPaths := []string{
+			filepath.Join(home, ".local", "bin", "mayfly"),
+			filepath.Join(home, ".local", "bin", "mf"),
+		}
+		for _, bp := range binPaths {
+			_ = os.Remove(bp)
+		}
+
+		fmt.Fprintln(stdout, "Removed mayfly and mf binaries.")
+		fmt.Fprint(stdout, "Do you also want to remove all encrypted secrets in ~/.mayfly? [y/N]: ")
+		resp2, _ := readLine(stdin)
+		if strings.ToLower(strings.TrimSpace(resp2)) == "y" {
+			_ = os.RemoveAll(filepath.Join(home, ".mayfly"))
+			fmt.Fprintln(stdout, "Removed ~/.mayfly directory.")
+		}
+		fmt.Fprintln(stdout, "MayFly has been uninstalled successfully.")
+		return 0
+
 	default:
-		return application.ExecutionResult{}, errorsWithUsage("unknown command")
+		fmt.Fprintf(stderr, "mayfly: unknown command %q\n\n", subcmd)
+		printUsage(stderr)
+		return 2
 	}
 }
 
-func (r *commandRuntime) executeAudit(ctx context.Context, args []string, output io.Writer) (application.ExecutionResult, error) {
-	if r == nil || r.audit == nil {
-		return application.ExecutionResult{}, application.ErrAuditFailed
+func getMasterPassword(svc *application.Service, in io.Reader, out, errOut io.Writer) ([]byte, error) {
+	if envPass := os.Getenv("MAYFLY_VAULT_PASSWORD"); envPass != "" {
+		return []byte(envPass), nil
 	}
-	if len(args) == 2 && args[1] == "verify" {
-		if err := r.audit.Verify(ctx); err != nil {
-			return application.ExecutionResult{}, err
-		}
-		_, err := fmt.Fprintln(output, "Audit verified")
-		return application.ExecutionResult{}, err
-	}
-	if len(args) != 1 {
-		return application.ExecutionResult{}, errorsWithUsage("audit accepts only the optional verify subcommand")
-	}
-	events, err := r.audit.Events(ctx)
-	if err != nil {
-		return application.ExecutionResult{}, err
-	}
-	for _, event := range events {
-		if _, err := fmt.Fprintf(output, "%s %s project=%s", event.At.UTC().Format(time.RFC3339Nano), event.Action, event.ProjectID); err != nil {
-			return application.ExecutionResult{}, err
-		}
-		if event.Secret != "" {
-			if _, err := fmt.Fprintf(output, " secret=%s", event.Secret); err != nil {
-				return application.ExecutionResult{}, err
-			}
-		}
-		if event.Command != "" {
-			if _, err := fmt.Fprintf(output, " command=%s", event.Command); err != nil {
-				return application.ExecutionResult{}, err
-			}
-		}
-		if event.ExitStatus != nil {
-			if _, err := fmt.Fprintf(output, " exit=%d", *event.ExitStatus); err != nil {
-				return application.ExecutionResult{}, err
-			}
-		}
-		if _, err := fmt.Fprintln(output); err != nil {
-			return application.ExecutionResult{}, err
-		}
-	}
-	return application.ExecutionResult{}, nil
-}
 
-func (r *commandRuntime) open(ctx context.Context, input *bufio.Reader, errorOutput io.Writer, allowInitialize bool) (*application.Service, error) {
-	if r == nil || r.service == nil {
-		return nil, application.ErrMissingVaultStorage
-	}
-	password, err := readLine(input, errorOutput, "Vault password: ")
-	if err != nil {
-		return nil, err
-	}
-	passwordBytes := []byte(password)
-	defer clearBytes(passwordBytes)
-	opened, err := r.service.OpenVault(ctx, passwordBytes)
-	if err == nil {
-		return opened, nil
-	}
-	if !allowInitialize || !errors.Is(err, application.ErrVaultMissing) {
-		return nil, err
-	}
-	if r.storage == nil {
-		return nil, application.ErrMissingVaultStorage
-	}
-	if err := r.storage.Initialize(passwordBytes); err != nil && !errors.Is(err, vault.ErrVaultExists) {
-		return nil, err
-	}
-	return r.service.OpenVault(ctx, passwordBytes)
-}
-
-func runInit(args []string, output, errorOutput io.Writer) error {
-	defaultRegistry, err := project.DefaultRegistryPath()
-	if err != nil {
-		return err
-	}
-	flags := flag.NewFlagSet("init", flag.ContinueOnError)
-	flags.SetOutput(errorOutput)
-	root := flags.String("path", ".", "project directory to initialize")
-	registryPath := flags.String("registry", defaultRegistry, "external MayFly project registry path")
-	if err := flags.Parse(args); err != nil {
-		return err
-	}
-	if flags.NArg() != 0 {
-		return fmt.Errorf("unexpected argument %q", flags.Arg(0))
-	}
-	registry, err := project.NewRegistry(*registryPath)
-	if err != nil {
-		return err
-	}
-	identity, created, err := registry.Initialize(*root)
-	if err != nil {
-		return err
-	}
-	if created {
-		auditPath, err := audit.DefaultPath()
+	if !svc.VaultExists() {
+		fmt.Fprint(errOut, "Create Master Password: ")
+		p1, err := readLine(in)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		auditLog, err := audit.New(auditPath)
-		if err != nil {
-			return err
+		if p1 == "" {
+			return nil, errors.New("password cannot be empty")
 		}
-		if err := auditLog.Record(context.Background(), domain.AuditEvent{
-			At: time.Now(), Action: domain.AuditProjectInitialized, ProjectID: identity.ID,
-		}); err != nil {
-			return err
+		if err := svc.InitializeVault(context.Background(), []byte(p1)); err != nil {
+			return nil, err
 		}
+		return []byte(p1), nil
 	}
-	if created {
-		_, _ = fmt.Fprintf(output, "Initialized project %s at %s\n", identity.ID, identity.Path)
-	} else {
-		_, _ = fmt.Fprintf(output, "Project %s is already initialized at %s\n", identity.ID, identity.Path)
+
+	fmt.Fprint(errOut, "Vault password: ")
+	p, err := readLine(in)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return []byte(p), nil
 }
 
-func readLine(input *bufio.Reader, prompt io.Writer, text string) (string, error) {
-	_, _ = io.WriteString(prompt, text)
-	value, err := input.ReadString('\n')
-	if err != nil && len(value) == 0 {
+func readLine(in io.Reader) (string, error) {
+	scanner := bufio.NewScanner(in)
+	if scanner.Scan() {
+		return strings.TrimRight(scanner.Text(), "\r\n"), nil
+	}
+	if err := scanner.Err(); err != nil {
 		return "", err
 	}
-	value = strings.TrimSuffix(value, "\n")
-	value = strings.TrimSuffix(value, "\r")
-	return value, nil
+	return "", io.EOF
 }
 
-func clearBytes(value []byte) {
-	for i := range value {
-		value[i] = 0
-	}
-}
+func printUsage(w io.Writer) {
+	fmt.Fprintln(w, `MayFly — Zero-Dependency Secrets Workspace & Process Injector
 
-func errorsWithUsage(message string) error {
-	return usageError(message)
-}
+Usage:
+  mayfly                              Launch interactive Global TUI Dashboard (Project Grid)
+  mayfly c, mayfly current            Launch TUI scoped directly to current project
+  mayfly init [-path DIR]             Initialize project in current directory or target path
+  mayfly set <NAME> [VALUE]           Add or update an encrypted secret
+  mayfly get <NAME>                   Output decrypted secret to stdout
+  mayfly list                         List all secret keys for the current project
+  mayfly delete <NAME>                Remove a secret from the vault
+  mayfly run <COMMAND> [ARGS...]      Inject secrets in memory and execute process
+  mayfly scan [DIR]                   Scan codebase for plaintext secret leaks
+  mayfly audit [verify]               View or cryptographically verify audit log
+  mayfly backup [FILE]                Export encrypted vault backup snapshot
+  mayfly restore <FILE>               Restore vault and projects from backup snapshot
+  mayfly migrate <OLD> <NEW>          Update project identity when directory moves
+  mayfly uninstall                    Cleanly uninstall binaries and remove data
+  mayfly help                         Show this help message
 
-type usageError string
-
-func (e usageError) Error() string { return string(e) }
-
-func usage(output io.Writer) {
-	_, _ = fmt.Fprintln(output, "usage:")
-	_, _ = fmt.Fprintln(output, "  mayfly init [-path DIR] [-registry FILE]")
-	_, _ = fmt.Fprintln(output, "  mayfly tui")
-	_, _ = fmt.Fprintln(output, "  mayfly set <NAME>")
-	_, _ = fmt.Fprintln(output, "  mayfly get <NAME>")
-	_, _ = fmt.Fprintln(output, "  mayfly list")
-	_, _ = fmt.Fprintln(output, "  mayfly delete <NAME>")
-	_, _ = fmt.Fprintln(output, "  mayfly run <COMMAND> [ARGS...]")
-	_, _ = fmt.Fprintln(output, "  mayfly scan")
-	_, _ = fmt.Fprintln(output, "  mayfly audit [verify]")
+Short alias:
+  All commands work with 'mf' as well (e.g. 'mf', 'mf c', 'mf run npm start').`)
 }

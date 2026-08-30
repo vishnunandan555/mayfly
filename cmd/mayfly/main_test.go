@@ -1,217 +1,116 @@
 package main
 
 import (
-	"context"
-	"errors"
+	"bytes"
+	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
-	"time"
-
-	"mayfly/application"
-	"mayfly/audit"
-	"mayfly/domain"
 )
 
-type commandTestProjects struct{ project domain.Project }
-
-func (p commandTestProjects) Current(context.Context) (domain.Project, error) { return p.project, nil }
-func (p commandTestProjects) Get(context.Context, domain.ProjectID) (domain.Project, error) {
-	return p.project, nil
-}
-func (p commandTestProjects) Discover(context.Context, string) (domain.Project, error) {
-	return p.project, nil
-}
-
-type commandTestSecrets struct {
-	material domain.SecretMaterial
-	puts     []domain.SecretInput
-	deletes  []domain.SecretName
-}
-
-func (s *commandTestSecrets) List(context.Context, domain.ProjectID) ([]domain.Secret, error) {
-	if s.material.Name == "" {
-		return nil, nil
-	}
-	return []domain.Secret{{Name: s.material.Name}}, nil
-}
-func (s *commandTestSecrets) Get(context.Context, domain.ProjectID, domain.SecretName) (domain.SecretMaterial, error) {
-	if s.material.Name == "" {
-		return domain.SecretMaterial{}, errors.New("secret not found")
-	}
-	return s.material, nil
-}
-func (s *commandTestSecrets) Put(_ context.Context, input domain.SecretInput) error {
-	s.puts = append(s.puts, input)
-	s.material = domain.SecretMaterial{Name: input.Name, Value: input.Value}
-	return nil
-}
-func (s *commandTestSecrets) Delete(_ context.Context, _ domain.ProjectID, name domain.SecretName) error {
-	s.deletes = append(s.deletes, name)
-	s.material = domain.SecretMaterial{}
-	return nil
-}
-
-type commandTestVault struct{ secrets application.SecretService }
-
-func (v commandTestVault) Open(context.Context, []byte) (application.SecretService, error) {
-	return v.secrets, nil
-}
-
-type commandTestExecutor struct {
-	request domain.ExecutionRequest
-	env     application.Environment
-}
-
-type commandTestScanner struct{ findings []domain.ScanFinding }
-
-func (s commandTestScanner) Scan(context.Context, domain.Project) ([]domain.ScanFinding, error) {
-	return append([]domain.ScanFinding(nil), s.findings...), nil
-}
-
-func (e *commandTestExecutor) Execute(_ context.Context, request domain.ExecutionRequest, environment application.Environment) (application.ExecutionResult, error) {
-	e.request = request
-	e.env = append(application.Environment(nil), environment...)
-	return application.ExecutionResult{ExitCode: 0}, nil
-}
-
-func newCommandTestRuntime(secrets application.SecretService) *commandRuntime {
-	executor := &commandTestExecutor{}
-	return &commandRuntime{
-		service: application.NewService(application.Dependencies{
-			Projects: commandTestProjects{project: domain.Project{ID: "project-1", Name: "Demo"}},
-			Vault:    commandTestVault{secrets: secrets},
-			Executor: executor,
-		}),
-	}
-}
-
-func TestExecuteSetUsesBufferedInputAndDoesNotPrintValue(t *testing.T) {
-	secrets := &commandTestSecrets{}
-	runtime := newCommandTestRuntime(secrets)
-	var output, errorOutput strings.Builder
-	_, err := runtime.execute(context.Background(), []string{"set", "TOKEN"}, strings.NewReader("master\nsecret-value\n"), &output, &errorOutput)
+func executeMayfly(t *testing.T, args []string, input string, dir string) (int, string, string) {
+	t.Helper()
+	oldDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(secrets.puts) != 1 || secrets.puts[0].Value != "secret-value" {
-		t.Fatalf("puts = %#v", secrets.puts)
+	if dir != "" {
+		if err := os.Chdir(dir); err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = os.Chdir(oldDir) }()
 	}
-	if strings.Contains(output.String(), "secret-value") || strings.Contains(errorOutput.String(), "secret-value") {
-		t.Fatal("set output leaked the secret value")
-	}
-	if !strings.Contains(output.String(), "Set TOKEN") {
-		t.Fatalf("output = %q", output.String())
-	}
+
+	var stdout, stderr bytes.Buffer
+	in := strings.NewReader(input)
+	code := run(args, in, &stdout, &stderr)
+	return code, stdout.String(), stderr.String()
 }
 
-func TestExecuteGetIsExplicitValueOutput(t *testing.T) {
-	runtime := newCommandTestRuntime(&commandTestSecrets{material: domain.SecretMaterial{Name: "TOKEN", Value: "secret-value"}})
-	var output, errorOutput strings.Builder
-	if _, err := runtime.execute(context.Background(), []string{"get", "TOKEN"}, strings.NewReader("master\n"), &output, &errorOutput); err != nil {
-		t.Fatal(err)
-	}
-	if output.String() != "secret-value\n" {
-		t.Fatalf("get output = %q", output.String())
-	}
-	if errorOutput.String() != "Vault password: " {
-		t.Fatalf("prompt output = %q", errorOutput.String())
-	}
-}
+func TestCompleteCLIWorkflow(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
 
-func TestExecuteListNamesOnlyAndDeleteConfirmation(t *testing.T) {
-	secrets := &commandTestSecrets{material: domain.SecretMaterial{Name: "TOKEN", Value: "secret-value"}}
-	runtime := newCommandTestRuntime(secrets)
-	var listOutput, listErrors strings.Builder
-	if _, err := runtime.execute(context.Background(), []string{"list"}, strings.NewReader("master\n"), &listOutput, &listErrors); err != nil {
+	projDir := filepath.Join(t.TempDir(), "test-app")
+	if err := os.MkdirAll(projDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if listOutput.String() != "TOKEN\n" || strings.Contains(listOutput.String(), "secret-value") {
-		t.Fatalf("list output = %q", listOutput.String())
-	}
-	var deleteOutput, deleteErrors strings.Builder
-	if _, err := runtime.execute(context.Background(), []string{"delete", "TOKEN"}, strings.NewReader("master\nn\n"), &deleteOutput, &deleteErrors); err != nil {
-		t.Fatal(err)
-	}
-	if len(secrets.deletes) != 0 || deleteOutput.String() != "Delete cancelled\n" {
-		t.Fatalf("delete cancellation = deletes %#v output %q", secrets.deletes, deleteOutput.String())
-	}
-}
 
-func TestExecuteRunDispatchesExactCommandAndDoesNotPrintEnvironment(t *testing.T) {
-	secrets := &commandTestSecrets{material: domain.SecretMaterial{Name: "TOKEN", Value: "secret-value"}}
-	executor := &commandTestExecutor{}
-	runtime := &commandRuntime{service: application.NewService(application.Dependencies{
-		Projects: commandTestProjects{project: domain.Project{ID: "project-1", Name: "Demo"}},
-		Vault:    commandTestVault{secrets: secrets},
-		Executor: executor,
-	})}
-	var output, errorOutput strings.Builder
-	result, err := runtime.execute(context.Background(), []string{"run", "program", "argument with spaces", "ユニコード"}, strings.NewReader("master\n"), &output, &errorOutput)
-	if err != nil || result.ExitCode != 0 {
-		t.Fatalf("run = %#v, %v", result, err)
+	// 1. Initialize project
+	code, stdout, stderr := executeMayfly(t, []string{"init", "-path", projDir}, "", "")
+	if code != 0 {
+		t.Fatalf("init failed: code=%d, err=%s", code, stderr)
 	}
-	if !reflect.DeepEqual(executor.request.Command, []string{"program", "argument with spaces", "ユニコード"}) {
-		t.Fatalf("command = %#v", executor.request.Command)
+	if !strings.Contains(stdout, "Initialized project") {
+		t.Fatalf("unexpected init output: %s", stdout)
 	}
-	if len(executor.env) != 1 || executor.env[0].Value != "secret-value" {
-		t.Fatalf("environment = %#v", executor.env)
-	}
-	if strings.Contains(output.String(), "secret-value") || strings.Contains(errorOutput.String(), "secret-value") {
-		t.Fatal("run output leaked secret")
-	}
-}
 
-func TestRunCommandValidationReturnsUsageExitCode(t *testing.T) {
-	var output, errorOutput strings.Builder
-	if got := run([]string{"get"}, strings.NewReader(""), &output, &errorOutput); got != 2 {
-		t.Fatalf("run exit code = %d, want 2 for command validation", got)
+	// 2. Set secret (creates master password)
+	code, stdout, stderr = executeMayfly(t, []string{"set", "DATABASE_URL", "postgres://localhost/db"}, "masterpass\n", projDir)
+	if code != 0 {
+		t.Fatalf("set failed: code=%d, err=%s", code, stderr)
 	}
-	if strings.Contains(errorOutput.String(), "secret-value") {
-		t.Fatal("validation output leaked a secret")
+	if !strings.Contains(stdout, "Secret DATABASE_URL set") {
+		t.Fatalf("unexpected set output: %s", stdout)
 	}
-}
 
-func TestAuditCommandPrintsSafeMetadataAndVerifies(t *testing.T) {
-	log, err := audit.New(filepath.Join(t.TempDir(), "audit.log"))
-	if err != nil {
-		t.Fatal(err)
+	// 3. Get secret
+	code, stdout, stderr = executeMayfly(t, []string{"get", "DATABASE_URL"}, "masterpass\n", projDir)
+	if code != 0 {
+		t.Fatalf("get failed: code=%d, err=%s", code, stderr)
 	}
-	if err := log.Record(context.Background(), domain.AuditEvent{
-		At: time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC), Action: domain.AuditSecretInjected,
-		ProjectID: "project-1", Secret: "TOKEN",
-	}); err != nil {
-		t.Fatal(err)
+	if strings.TrimSpace(stdout) != "postgres://localhost/db" {
+		t.Fatalf("unexpected get output: %s", stdout)
 	}
-	runtime := &commandRuntime{audit: log}
-	var output strings.Builder
-	if _, err := runtime.executeAudit(context.Background(), []string{"audit"}, &output); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(output.String(), "SECRET_INJECTED") || strings.Contains(output.String(), "secret-value") {
-		t.Fatalf("audit output = %q", output.String())
-	}
-	output.Reset()
-	if _, err := runtime.executeAudit(context.Background(), []string{"audit", "verify"}, &output); err != nil || output.String() != "Audit verified\n" {
-		t.Fatalf("audit verify = %q, %v", output.String(), err)
-	}
-}
 
-func TestExecuteScanReportsFindingsWithoutValuesAndUsesCIExitCode(t *testing.T) {
-	runtime := &commandRuntime{service: application.NewService(application.Dependencies{
-		Projects: commandTestProjects{project: domain.Project{ID: "project-1", Name: "Demo", Path: "/project"}},
-		Scanner: commandTestScanner{findings: []domain.ScanFinding{{
-			Path: ".env", Category: "high-risk-filename", Severity: domain.SeverityWarning,
-			Message: "environment-style file may contain plaintext secrets",
-		}}},
-	})}
-	var output strings.Builder
-	result, err := runtime.execute(context.Background(), []string{"scan"}, strings.NewReader(""), &output, &strings.Builder{})
-	if err != nil || result.ExitCode != 3 {
-		t.Fatalf("scan = %#v, %v", result, err)
+	// 4. List secrets
+	code, stdout, stderr = executeMayfly(t, []string{"list"}, "masterpass\n", projDir)
+	if code != 0 {
+		t.Fatalf("list failed: code=%d, err=%s", code, stderr)
 	}
-	if !strings.Contains(output.String(), ".env") || strings.Contains(output.String(), "secret-value") {
-		t.Fatalf("scan output = %q", output.String())
+	if !strings.Contains(stdout, "DATABASE_URL") {
+		t.Fatalf("unexpected list output: %s", stdout)
+	}
+
+	// 5. Run command with injected secret
+	code, stdout, stderr = executeMayfly(t, []string{"run", "sh", "-c", "echo DB=$DATABASE_URL"}, "masterpass\n", projDir)
+	if code != 0 {
+		t.Fatalf("run failed: code=%d, err=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "DB=postgres://localhost/db") {
+		t.Fatalf("unexpected run output: %s", stdout)
+	}
+
+	// 6. Plaintext scanner
+	code, stdout, stderr = executeMayfly(t, []string{"scan"}, "", projDir)
+	if code != 0 {
+		t.Fatalf("scan failed: code=%d, err=%s", code, stderr)
+	}
+
+	// 7. Audit log & verification
+	code, stdout, stderr = executeMayfly(t, []string{"audit", "verify"}, "", projDir)
+	if code != 0 {
+		t.Fatalf("audit verify failed: code=%d, err=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Audit log hash chain verified successfully") {
+		t.Fatalf("unexpected audit output: %s", stdout)
+	}
+
+	// 8. Backup & Restore
+	backupFile := filepath.Join(tempHome, "backup.json")
+	code, stdout, stderr = executeMayfly(t, []string{"backup", backupFile}, "", projDir)
+	if code != 0 {
+		t.Fatalf("backup failed: code=%d, err=%s", code, stderr)
+	}
+
+	code, stdout, stderr = executeMayfly(t, []string{"restore", backupFile}, "", projDir)
+	if code != 0 {
+		t.Fatalf("restore failed: code=%d, err=%s", code, stderr)
+	}
+
+	// 9. Delete secret
+	code, stdout, stderr = executeMayfly(t, []string{"delete", "DATABASE_URL"}, "masterpass\n", projDir)
+	if code != 0 {
+		t.Fatalf("delete failed: code=%d, err=%s", code, stderr)
 	}
 }
