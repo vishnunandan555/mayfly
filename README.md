@@ -12,80 +12,244 @@
 
 ## The Problem
 
-Every project has a `.env` file sitting on disk with real API keys in it, in plain text.
+Every software project typically has a `.env` or configuration file sitting on disk containing real API keys and database credentials in plaintext.
 
-The moment you run `npm install` or `pip install`, you're trusting every package (and every package's dependencies) not to run malicious code. In 2025 alone, real supply-chain attacks (Shai-Hulud, the `chalk`/`debug` compromise, and others) shipped code that specifically scanned disks for `.env` files and stole what it found — before the developer even ran their app.
+The moment you run `npm install`, `pip install`, or `cargo build`, you trust thousands of transitive third-party dependencies not to execute malicious install scripts. Real-world supply-chain attacks repeatedly scan disk trees for `.env` files and exfiltrate credentials before a developer even launches their application.
 
-You can't fully stop a malicious `postinstall` script from running. But you *can* make sure there's nothing on disk worth stealing.
+You cannot completely prevent untrusted install scripts from running on your machine. But you **can** ensure there are no plaintext secrets on disk for them to steal.
+
+---
 
 ## What MayFly Does
 
-MayFly removes `.env` files from your project entirely. Your secrets live in one encrypted vault on your machine. When you want to run your app, you run it *through* MayFly instead of directly:
+MayFly eliminates plaintext `.env` files from your project folders. Secrets are encrypted at rest in an external vault (`~/.mayfly/vault.enc`) outside your code repository. When you launch your application, you run it **through** MayFly:
 
+```bash
+mayfly run npm run dev
 ```
-mayfly npm run dev
-```
 
-MayFly decrypts your secrets in memory only, injects them straight into the environment of that one process, and forgets them the moment the process stops. Nothing ever touches your project folder. Your code doesn't change — `process.env.API_KEY` still works exactly like before.
+MayFly:
+1. Identifies the current project directory using filesystem identity.
+2. Prompts for your master password (or uses your session).
+3. Decrypts only that project's secrets in memory (RAM).
+4. Injects the secrets directly into the target process's environment.
+5. Launches the process directly via standard `os/exec` (never invoking a shell).
+6. Releases transient memory references immediately upon process exit.
+7. Records an authenticated, tamper-evident audit event.
 
-## How It Works
+Nothing is ever written to disk in your project folder. Your application code does not need to change: standard environment variable lookups like `process.env.API_KEY` or `os.Getenv("DATABASE_URL")` work seamlessly.
 
-1. You save your secrets into MayFly's vault once, through a simple terminal menu.
-2. Your secrets are encrypted and stored in one file, outside your project (`~/.mayfly/vault.enc`).
-3. When you run `mayfly <your command>`, MayFly figures out which project you're in, decrypts only that project's secrets in RAM, and hands them to the process you're launching.
-4. When the process exits, the secrets are gone. Nothing was ever written to your project folder.
-5. Every time a secret is accessed, it's logged in a way that can't be quietly edited after the fact — so if anything looks off, there's a trail.
-
-No `.env` file. Nothing for a malicious install script to find.
+---
 
 ## Features
 
-- 🔒 **Encrypted vault** — secrets are encrypted at rest, decrypted only in memory, only when needed
-- ⚡ **Zero code changes** — your app still reads secrets the normal way
-- 🖥️ **Simple terminal UI** — add, edit, and manage secrets without hand-editing files
-- 📁 **Auto project detection** — MayFly knows which project's secrets to load based on where you run it
-- 🧾 **Tamper-evident access log** — every secret access is recorded in a way that shows if the log itself was ever altered
-- 🛡️ **Leak guard** — warns you if a plaintext secret or missing `.gitignore` rule is about to ship anyway
+- 🔒 **Encrypted Vault at Rest**: AES-256-GCM authenticated encryption with PBKDF2-HMAC-SHA256 key derivation (600,000 iterations default) and fresh per-save random nonces.
+- ⚡ **In-Memory Process Injection**: Secrets go straight into the launched process environment via `os/exec`; no temporary `.env` file is ever created.
+- 🖥️ **Full-Featured Custom TUI**: Complete terminal interface built from scratch without UI libraries (Vault Unlock, Secret List with masked values, Editor, Delete Confirmation, Scan Results, and Audit Summary).
+- 📁 **Project Isolation**: Deterministic Linux inode-based project identity ensures secrets for Project A are completely isolated from Project B.
+- 🧾 **Tamper-Evident Access Trail**: Cryptographic SHA-256 hash-chained audit log with sequence checkpoints detects any historical alteration, truncation, or reordering.
+- 🛡️ **Heuristic Leak Scanner**: Scans project files for accidental plaintext `.env` files, credentials, and private keys before committing code.
+- 🚫 **Zero Third-Party Dependencies**: Built exclusively with the **Go 1.27 standard library** (`go.mod` has no `require` block).
 
-## Why Zero Dependency
+---
 
-This isn't a style choice, it's the point of the project. A secrets manager that pulls in third-party packages is asking you to trust exactly the kind of thing it's supposed to protect you from. Every single piece of MayFly — the encryption, the terminal interface, the process launching, the logging — is built using only Go's standard library. Nothing to audit but our own code.
+## Quick Start
 
-## Tech Stack
+### 1. Build MayFly
 
-- **Language:** Go (standard library only, no third-party packages)
-- **Encryption:** `crypto/aes` + `crypto/cipher` (AES-256-GCM)
-- **Key derivation:** hand-implemented from `crypto/hmac` + `crypto/sha256` (since the usual helper packages for this aren't part of true Go stdlib)
-- **Process launching:** `os/exec`
-- **Terminal UI:** built from raw terminal mode + ANSI escape codes, no UI library
-- **CLI parsing:** `flag`
+MayFly requires Go 1.27+. Compile the binary using `go` or `make`:
 
-## Modules We're Rebuilding From Scratch
+```bash
+# Using standard Go tooling
+go build -o mayfly ./cmd/mayfly
 
-These are the pieces most projects would just `go get`. We're writing them ourselves using only Go's standard library.
+# Or using Make
+make build
+```
 
-| Module | What it normally is | What we're building |
-|---|---|---|
-| **TUI engine** | A library like `bubbletea` or `tview` | Our own terminal renderer — raw terminal mode, cursor control, key-event loop, and layout, all via hand-written ANSI escape codes |
-| **Secrets loader** | `dotenv` / `godotenv` | In-memory environment injection — secrets go straight into a spawned process's environment via `os/exec`, no file ever written |
-| **Key derivation function** | `golang.org/x/crypto/pbkdf2` or `scrypt` | Our own PBKDF2 implementation (RFC 8018), built from `crypto/hmac` + `crypto/sha256` — this isn't in true Go stdlib, so we're writing it ourselves |
-| **Encrypted vault / storage format** | A local database lib or serialization package | Our own file format for the encrypted vault, built on `crypto/aes` (AES-256-GCM) and raw file I/O |
-| **Tamper-evident audit log** | An audit-logging package | A hash-chained log we designed ourselves — each entry's hash includes the one before it, via `crypto/sha256` |
-| **CLI argument parsing** | A framework like `cobra` | Go's built-in `flag` package |
-| **Terminal styling/colour** | A package like `chalk` or `fatih/color` | Raw ANSI colour codes, written by hand |
+Move `mayfly` to your `$PATH` (e.g. `/usr/local/bin/mayfly`).
 
-*(Full list with one-line rationale for each goes in `STDLIB.md` — this table is the preview.)*
+### 2. Initialize a Project
 
-## Threat Model
+Navigate to any project directory and initialize MayFly:
 
-- **Protects against:** malicious install-time scripts scanning for plaintext secrets on disk
-- **Does not protect against:** a fully compromised machine, a hostile process running *while* MayFly is actively injecting secrets, or someone with your master password
-- Threat model and its honest limits are documented in full in the project's `STDLIB.md` / security notes
+```bash
+cd ~/code/my-project
+mayfly init
+```
+
+This registers the project in MayFly's external registry (`~/.mayfly/projects.json`).
+
+### 3. Add Secrets
+
+Save secrets into your encrypted vault:
+
+```bash
+mayfly set OPENAI_API_KEY
+# Prompts for your vault master password and secret value
+```
+
+List secret names stored for the current project:
+
+```bash
+mayfly list
+```
+
+Explicitly retrieve a secret value to stdout when needed:
+
+```bash
+mayfly get OPENAI_API_KEY
+```
+
+Delete a secret:
+
+```bash
+mayfly delete OPENAI_API_KEY
+```
+
+### 4. Run Applications with Injected Secrets
+
+Execute your command with secrets injected directly into its runtime environment:
+
+```bash
+mayfly run npm run dev
+mayfly run python main.py
+mayfly run ./my-binary --config=prod
+```
+
+### 5. Launch the Interactive TUI
+
+Launch MayFly's full-screen terminal interface:
+
+```bash
+mayfly tui
+```
+
+Or run the interactive demonstration harness against sample data:
+
+```bash
+go run ./cmd/tui-demo
+```
+
+### 6. Scan for Plaintext Leaks
+
+Scan your project tree for accidentally committed plaintext `.env` files or API key assignments:
+
+```bash
+mayfly scan
+```
+
+Returns exit code `0` if clean, `3` if potential leaks are detected, and `1` on operational errors.
+
+### 7. View & Verify the Audit Trail
+
+Inspect the metadata access log:
+
+```bash
+mayfly audit
+```
+
+Verify that the cryptographic hash chain has not been tampered with:
+
+```bash
+mayfly audit verify
+```
+
+---
+
+## Interactive TUI Screens
+
+MayFly features 6 distinct presentation screens:
+
+1. **Vault Unlock**: Centered master password prompt with bullet masking (`•`) and instant memory clearing upon submission.
+2. **Secret List**: Displays the current project path in the header (`MayFly   ~/code/my-project`), formatted secret names with masked values (`OPENAI_API_KEY  ••••••••••`), safe status bar, and shortcut hints.
+3. **Create / Edit Secret**: Modal form for secret name and masked value. Plaintext is loaded on demand only into the input field and cleared immediately upon save or cancellation.
+4. **Delete Confirmation**: Modal dialog confirming secret removal.
+5. **Scan Results**: Displays heuristic findings (relative path, line:col, severity `[CRITICAL]`/`[WARNING]`, category, and safe description) with `R` rescan and `Esc` return.
+6. **Audit Summary**: Displays verified tamper-evident audit events (timestamps, actions, project IDs, secret names, commands, exit codes).
+
+**TUI Navigation Shortcuts**:
+- `↑ / ↓` or `j / k`: Navigate list items
+- `Enter`: Edit selected secret / Submit form
+- `N` / `n`: Create new secret
+- `D` / `d`: Delete selected secret
+- `S` / `s`: Run scanner and view results
+- `A` / `a`: View audit log summary
+- `Tab` / `Shift-Tab`: Toggle input field focus
+- `Esc` / `Q` / `q`: Return to previous screen or quit
+
+---
+
+## Security Model & Honest Threat Boundaries
+
+MayFly provides strong, pragmatic protection against modern development attack vectors, but security boundaries must be accurately stated:
+
+### What MayFly Protects Against
+- **Install-time supply chain exfiltration**: Malicious post-install scripts (`package.json`, `setup.py`, `build.rs`) scanning disk directories for `.env`, `.env.local`, or credentials files will find nothing.
+- **Accidental git commits**: Plaintext `.env` files never exist on disk, preventing accidental staging or pushing to remote repositories.
+- **Unauthorized local inspection at rest**: Vault files are encrypted with AES-256-GCM using authenticated headers and 600,000 PBKDF2 iterations; vault files are permissioned `0600` and directories `0700`.
+- **Silent audit tampering**: The SHA-256 hash-chained log detects altered, reordered, or truncated event entries.
+
+### What MayFly Does NOT Protect Against (Threat Limits)
+- **Malicious code inside the running application**: A dependency executed *during* `mayfly run` has access to its own process environment and can read injected variables via `os.Environ()` or `process.env`. MayFly controls storage and injection, not the runtime behavior of the target process.
+- **Child process inheritance**: Programs launched by the target application inherit the parent process environment according to OS conventions.
+- **Full machine compromise / root access**: An attacker with root access or ptrace permissions can inspect process memory (`/proc/<pid>/mem`).
+- **Cryptographic immutability**: The audit log is tamper-evident, not an immutable blockchain. An attacker with full write access to the filesystem who rewrites the entire log, recalculated hashes, and updated the checkpoint can forge history.
+- **Go GC memory zeroization**: MayFly zeroes byte slices and releases transient references as soon as operations complete. However, Go's garbage-collected runtime does not guarantee immediate physical memory erasure of prior string allocations.
+- **Heuristic scanner limits**: `mayfly scan` uses conservative regular expressions and filename checks; it is a heuristic detector of likely exposures, not mathematical proof that a codebase is free of secrets.
+- **Terminal compatibility**: Raw mode requires ANSI/VT-compatible Linux TTYs (using termios ioctl). Unsupported platforms fallback to safe error handling.
+
+---
+
+## Zero-Dependency Architecture
+
+MayFly achieves 100% of its capabilities using only Go 1.27 standard library packages:
+
+```text
+CLI / TUI Presentation Layer
+  ↓ (application.ScreenService)
+Application Orchestration Layer (application/)
+  ↓
+Domain Types & Validation (domain/)
+  ↓
+Core Subsystems (Standard Library Only):
+  • Vault Storage & PBKDF2 KDF (vault/)        → crypto/aes, crypto/cipher, crypto/hmac, crypto/sha256
+  • Project Identity & Isolation (project/)    → syscall, os, path/filepath, crypto/sha256
+  • Process Executor (executor/)               → os/exec, context
+  • Tamper-Evident Audit Log (audit/)          → crypto/sha256, encoding/json
+  • Heuristic Leak Scanner (scanner/)          → path/filepath, regexp, unicode/utf8
+  • Terminal UI Engine (screen/)               → syscall, os, io, unicode
+```
+
+See [STDLIB.md](STDLIB.md) for the detailed substitution breakdown and [deps-proof.txt](deps-proof.txt) for reproducible zero-dependency audit commands.
+
+---
+
+## Verification & Testing
+
+Execute the complete verification suite:
+
+```bash
+# Run all unit, integration, and E2E tests
+go test -v ./...
+
+# Run the race detector
+go test -race ./...
+
+# Run static analysis
+go vet ./...
+
+# Verify zero dependencies
+./zero-dep-audit.sh
+```
+
+---
 
 ## Built For
 
-Zero Dependency 2026 - a 72-hour hackathon by Hackathon Raptors. Track E: Security & Crypto Utilities.
+**Zero Dependency Hackathon 2026** — Organized by Hackathon Raptors.  
+**Track:** Track E (Security & Crypto Utilities).
 
 ## License
 
- GNU Affero General Public License Version 3
+[GNU Affero General Public License Version 3](LICENSE)

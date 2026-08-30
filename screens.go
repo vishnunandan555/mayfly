@@ -1,39 +1,33 @@
-// Package mayfly contains the application-facing pieces of MayFly. The
-// screen package remains responsible for terminal mechanics; this package
-// composes its widgets into vault screens and knows nothing about encryption.
+// Package mayfly contains the application-facing screens of MayFly.
+// The screen package is the presentation/input layer; this package composes
+// widgets into MayFly application screens and coordinates use cases via
+// application service interfaces.
 package mayfly
 
 import (
+	"context"
+	"fmt"
 	"io"
 	"os"
 	"strings"
 	"unicode"
 
+	"mayfly/application"
+	"mayfly/domain"
 	"mayfly/screen"
 )
 
-// Secret is the vault record consumed by the screen layer. Value is retained
-// only in memory for display masking and vault operations; it is never put in
-// a status message, error text, or rendered frame as plaintext.
-type Secret struct {
-	Name  string
-	Value string
-}
+// Secret is the legacy vault record type retained for compatibility.
+type Secret = application.ScreenSecret
 
-// Vault is the small storage contract required by the MayFly screens. It is
-// deliberately cryptography-free: a separate vault implementation owns
-// encryption, persistence, and authentication details.
-type Vault interface {
-	Secrets() ([]Secret, error)
-	SetSecret(name, value string) error
-	DeleteSecret(name string) error
-}
+// Vault is the legacy storage contract retained for compatibility.
+type Vault = application.ScreenVault
 
-// VaultOpener unlocks or opens a vault. The password is passed directly to
-// the vault implementation and is not retained by Screens after the attempt.
-type VaultOpener interface {
-	Unlock(password string) (Vault, error)
-}
+// VaultOpener is the legacy unlock boundary retained for compatibility.
+type VaultOpener = application.ScreenVaultOpener
+
+// ScreenService is the application service boundary used by MayFly screens.
+type ScreenService = application.ScreenService
 
 // ScreenMode identifies the currently visible application screen.
 type ScreenMode uint8
@@ -43,30 +37,37 @@ const (
 	ModeSecrets
 	ModeEditor
 	ModeDelete
+	ModeScan
+	ModeAudit
 	ModeError
 )
 
 // Screens is the stateful application screen controller. It exposes a
 // screen.Widget view and ApplicationOptions so callers can use the existing
-// terminal runtime without coupling this layer to process-global terminal
-// state.
+// terminal runtime without coupling this layer to backend internals or
+// process-global terminal state.
 type Screens struct {
-	view   *screenView
-	opener VaultOpener
-	vault  Vault
+	view    *screenView
+	service ScreenService
 
-	mode       ScreenMode
-	returnMode ScreenMode
-	status     string
+	mode        ScreenMode
+	returnMode  ScreenMode
+	status      string
+	projectPath string
 
-	secrets     []Secret
-	editIndex   int
-	deleteIndex int
+	secrets       []domain.Secret
+	scanFindings  []domain.ScanFinding
+	auditEvents   []domain.AuditEvent
+	editIndex     int
+	editOrigName  domain.SecretName
+	deleteIndex   int
 
 	password  *screen.TextInput
 	name      *screen.TextInput
 	value     *screen.TextInput
 	list      *screen.List
+	scanList  *screen.List
+	auditList *screen.List
 	confirm   *screen.ConfirmDialog
 	errorBox  *screen.ConfirmDialog
 	statusBar *screen.StatusBar
@@ -74,62 +75,88 @@ type Screens struct {
 	app *screen.Application
 }
 
-// NewScreens creates a locked screen backed by opener. Unlock is performed
-// only after the user submits the password field.
-func NewScreens(opener VaultOpener) *Screens {
-	s := newScreens(opener, nil)
-	s.setMode(nil, ModeUnlock)
+// NewScreens creates an application screen controller backed by service.
+// If the service is not yet unlocked, it starts in ModeUnlock. If already
+// unlocked, it loads secrets and starts in ModeSecrets.
+func NewScreens(service ScreenService) *Screens {
+	s := newScreens(service)
+	if service != nil && service.IsUnlocked() {
+		s.loadProjectInfo()
+		s.setMode(nil, ModeSecrets)
+		if !s.reloadSecrets() {
+			s.showError(nil, ModeSecrets, "Unable to load secrets")
+		}
+	} else {
+		s.setMode(nil, ModeUnlock)
+	}
 	return s
 }
 
-// NewScreensWithVault creates an already-unlocked screen. It loads records
-// through vault immediately; a load failure is represented by the error modal
-// without exposing the underlying error text.
+// NewScreensWithService creates an application screen controller backed by service.
+func NewScreensWithService(service ScreenService) *Screens {
+	return NewScreens(service)
+}
+
+// NewScreensWithVault creates an unlocked screen controller from a legacy Vault.
 func NewScreensWithVault(vault Vault) *Screens {
-	s := newScreens(nil, vault)
-	s.setMode(nil, ModeSecrets)
-	if vault == nil {
-		s.showError(nil, ModeSecrets, "Vault unavailable")
-		return s
-	}
-	if !s.reload() {
-		s.showError(nil, ModeSecrets, "Unable to load secrets")
-	}
-	return s
+	service := application.ScreenServiceFromVault(vault)
+	return NewScreens(service)
 }
 
-func newScreens(opener VaultOpener, vault Vault) *Screens {
+// NewScreensWithOpener creates a locked screen controller from a legacy VaultOpener.
+func NewScreensWithOpener(opener VaultOpener) *Screens {
+	service := application.ScreenServiceFromOpener(opener)
+	return NewScreens(service)
+}
+
+func newScreens(service ScreenService) *Screens {
 	password := screen.NewTextInput()
 	password.Password = true
-	password.Placeholder = "Password"
+	password.Placeholder = "Master password"
+
 	name := screen.NewTextInput()
 	name.Placeholder = "Secret name"
+
 	value := screen.NewTextInput()
 	value.Password = true
 	value.Placeholder = "Secret value"
 
+	list := screen.NewList(nil)
+	list.EmptyText = "No secrets in project. Press N to add one."
+
+	scanList := screen.NewList(nil)
+	scanList.EmptyText = "Project scan clean. No plaintext secrets found."
+
+	auditList := screen.NewList(nil)
+	auditList.EmptyText = "No audit events recorded yet."
+
+	confirm := screen.NewConfirmDialog("Delete secret", "Delete this secret?")
+	confirm.YesLabel = "Delete"
+	confirm.NoLabel = "Keep"
+
+	errorBox := screen.NewConfirmDialog("Error", "Unable to complete operation")
+	errorBox.YesLabel = "OK"
+	errorBox.NoLabel = ""
+
+	statusBar := screen.NewStatusBar()
+
 	s := &Screens{
-		opener:    opener,
-		vault:     vault,
+		service:   service,
 		password:  password,
 		name:      name,
 		value:     value,
-		list:      screen.NewList(nil),
-		confirm:   screen.NewConfirmDialog("Delete secret", "Delete this secret?"),
-		errorBox:  screen.NewConfirmDialog("Error", "Unable to complete operation"),
-		statusBar: screen.NewStatusBar(),
+		list:      list,
+		scanList:  scanList,
+		auditList: auditList,
+		confirm:   confirm,
+		errorBox:  errorBox,
+		statusBar: statusBar,
 	}
-	s.confirm.YesLabel = "Delete"
-	s.confirm.NoLabel = "Keep"
-	s.errorBox.YesLabel = "OK"
-	s.errorBox.NoLabel = ""
-	s.list.EmptyText = "No secrets. Press N to add one."
 	s.view = &screenView{owner: s}
 	return s
 }
 
 // View returns the root widget that renders the current application screen.
-// Focusable child widgets are managed through the returned ApplicationOptions.
 func (s *Screens) View() screen.Widget {
 	if s == nil {
 		return nil
@@ -145,8 +172,7 @@ func (s *Screens) Mode() ScreenMode {
 	return s.mode
 }
 
-// Status returns the current safe, user-facing status message. It never
-// contains a vault error string or secret value.
+// Status returns the current safe, user-facing status message.
 func (s *Screens) Status() string {
 	if s == nil {
 		return ""
@@ -154,14 +180,12 @@ func (s *Screens) Status() string {
 	return s.status
 }
 
-// ApplicationOptions adapts the screens to the existing in-memory-testable
-// application runtime. The runtime replaces Output, Input, and Size when
-// Run is called through RunTerminal.
+// ApplicationOptions adapts the screens to the existing in-memory application runtime.
 func (s *Screens) ApplicationOptions(output io.Writer, input screen.Input, size screen.Size) screen.ApplicationOptions {
 	if s == nil {
 		return screen.ApplicationOptions{Output: output, Input: input, Size: size}
 	}
-	focusOrder := []screen.Widget{s.password, s.list, s.name, s.value, s.confirm, s.errorBox}
+	focusOrder := []screen.Widget{s.password, s.list, s.name, s.value, s.confirm, s.scanList, s.auditList, s.errorBox}
 	return screen.ApplicationOptions{
 		Output:     output,
 		Input:      input,
@@ -175,8 +199,7 @@ func (s *Screens) ApplicationOptions(output io.Writer, input screen.Input, size 
 	}
 }
 
-// Run starts the real terminal application. Raw mode and terminal sizing are
-// acquired only by screen.RunTerminal and are restored there on every exit.
+// Run starts the real terminal application.
 func (s *Screens) Run(file *os.File) error {
 	if s == nil {
 		return screen.RunTerminal(file, screen.ApplicationOptions{})
@@ -185,9 +208,7 @@ func (s *Screens) Run(file *os.File) error {
 	return screen.RunTerminal(file, s.ApplicationOptions(nil, nil, screen.Size{}))
 }
 
-// RunIO starts the screens with separate input and output streams. This is
-// the preferred form for normal terminal processes: input is usually
-// os.Stdin and output is usually os.Stdout.
+// RunIO starts the screens with separate input and output streams.
 func (s *Screens) RunIO(input *os.File, output io.Writer) error {
 	if s == nil {
 		return screen.RunTerminalIO(input, output, screen.ApplicationOptions{})
@@ -226,8 +247,12 @@ func (v *screenView) Render(frame *screen.Frame) {
 	case ModeDelete:
 		s.renderSecrets(frame, area)
 		s.renderDelete(frame, area)
+	case ModeScan:
+		s.renderScan(frame, area)
+	case ModeAudit:
+		s.renderAudit(frame, area)
 	case ModeError:
-		if s.vault != nil {
+		if s.service != nil && s.service.IsUnlocked() {
 			s.renderSecrets(frame, area)
 		} else {
 			s.renderUnlock(frame, area)
@@ -242,13 +267,17 @@ func (s *Screens) renderStatus(width int) {
 	case ModeUnlock:
 		s.statusBar.Hints = "Enter Unlock   Esc Quit"
 	case ModeSecrets:
-		s.statusBar.Hints = "↑↓ Select   Enter Edit   N New   D Delete   Esc Quit"
+		s.statusBar.Hints = "N New   Enter Edit   D Delete   S Scan   A Audit   Q Quit"
 	case ModeEditor:
 		s.statusBar.Hints = "Tab Next   Enter Save   Esc Cancel"
 	case ModeDelete:
 		s.statusBar.Hints = "←→ Choose   Enter Confirm   Esc Cancel"
+	case ModeScan:
+		s.statusBar.Hints = "↑↓ Scroll   R Rescan   Esc Back"
+	case ModeAudit:
+		s.statusBar.Hints = "↑↓ Scroll   Esc Back"
 	default:
-		s.statusBar.Hints = "Enter Continue   Esc Back"
+		s.statusBar.Hints = "Enter OK   Esc Back"
 	}
 	if width < 1 {
 		s.statusBar.Hints = ""
@@ -265,19 +294,35 @@ func (s *Screens) renderStatus(width int) {
 }
 
 func (s *Screens) renderUnlock(frame *screen.Frame, area screen.Rect) {
-	box := modalRect(area, 8, 54)
-	drawBoxTitle(frame, box, "Unlock MayFly", screen.Style{Foreground: screen.ColorCyan})
-	frame.DrawTextIn(screen.NewRect(box.Min.Row+2, box.Min.Column+2, 1, max0(box.Size().Columns-4)), "Vault password", screen.TextOptions{Style: screen.Style{Attributes: screen.AttrBold}})
-	field := screen.NewRect(box.Min.Row+3, box.Min.Column+2, 1, max0(box.Size().Columns-4))
+	box := modalRect(area, 10, 50)
+	drawBoxTitle(frame, box, "MayFly", screen.Style{Foreground: screen.ColorCyan, Attributes: screen.AttrBold})
+	if box.Size().Rows < 6 || box.Size().Columns < 10 {
+		return
+	}
+	width := max0(box.Size().Columns - 4)
+	frame.DrawTextIn(screen.NewRect(box.Min.Row+2, box.Min.Column+2, 1, width), "Unlock vault", screen.TextOptions{Style: screen.Style{Attributes: screen.AttrBold}})
+	frame.DrawTextIn(screen.NewRect(box.Min.Row+4, box.Min.Column+2, 1, width), "Master password:", screen.TextOptions{})
+	field := screen.NewRect(box.Min.Row+5, box.Min.Column+2, 1, width)
 	s.password.SetBounds(field)
 	s.password.Render(frame)
-	status := screen.NewRect(box.Max.Row-2, box.Min.Column+2, 1, max0(box.Size().Columns-4))
+
+	buttonText := "[ Enter ]"
+	buttonCol := box.Min.Column + (box.Size().Columns-screen.TextWidth(buttonText))/2
+	if box.Min.Row+7 < box.Max.Row-1 {
+		frame.DrawTextIn(screen.NewRect(box.Min.Row+7, buttonCol, 1, width), buttonText, screen.TextOptions{Style: screen.Style{Foreground: screen.ColorCyan, Attributes: screen.AttrBold}})
+	}
+
+	status := screen.NewRect(box.Max.Row-2, box.Min.Column+2, 1, width)
 	s.statusBar.SetBounds(status)
 	s.statusBar.Render(frame)
 }
 
 func (s *Screens) renderSecrets(frame *screen.Frame, area screen.Rect) {
-	drawBoxTitle(frame, area, "MayFly", screen.Style{Foreground: screen.ColorCyan, Attributes: screen.AttrBold})
+	title := "MayFly"
+	if s.projectPath != "" {
+		title = fmt.Sprintf("MayFly   %s", s.projectPath)
+	}
+	drawBoxTitle(frame, area, title, screen.Style{Foreground: screen.ColorCyan, Attributes: screen.AttrBold})
 	inner := screen.Padding{Top: 1, Right: 1, Bottom: 1, Left: 1}.Inset(area)
 	if inner.Empty() {
 		return
@@ -286,7 +331,7 @@ func (s *Screens) renderSecrets(frame *screen.Frame, area screen.Rect) {
 	listRows := max0(inner.Size().Rows - statusRows)
 	listArea := screen.NewRect(inner.Min.Row, inner.Min.Column, listRows, inner.Size().Columns)
 	statusArea := screen.NewRect(inner.Max.Row-1, inner.Min.Column, statusRows, inner.Size().Columns)
-	s.list.SetItems(s.displayLines(listArea.Size().Columns))
+	s.list.SetItems(s.displaySecretLines(listArea.Size().Columns))
 	s.list.SetBounds(listArea)
 	s.list.Render(frame)
 	s.statusBar.SetBounds(statusArea)
@@ -294,7 +339,7 @@ func (s *Screens) renderSecrets(frame *screen.Frame, area screen.Rect) {
 }
 
 func (s *Screens) renderEditor(frame *screen.Frame, area screen.Rect) {
-	box := modalRect(area, 10, 66)
+	box := modalRect(area, 11, 66)
 	title := "Add secret"
 	if s.editIndex >= 0 {
 		title = "Edit secret"
@@ -316,6 +361,67 @@ func (s *Screens) renderDelete(frame *screen.Frame, area screen.Rect) {
 	box := modalRect(area, 8, 58)
 	s.confirm.SetBounds(box)
 	s.confirm.Render(frame)
+}
+
+func (s *Screens) renderScan(frame *screen.Frame, area screen.Rect) {
+	drawBoxTitle(frame, area, "MayFly — Scan Results", screen.Style{Foreground: screen.ColorYellow, Attributes: screen.AttrBold})
+	inner := screen.Padding{Top: 1, Right: 1, Bottom: 1, Left: 1}.Inset(area)
+	if inner.Empty() {
+		return
+	}
+	headerRows := 2
+	statusRows := 1
+	listRows := max0(inner.Size().Rows - headerRows - statusRows)
+
+	headerArea := screen.NewRect(inner.Min.Row, inner.Min.Column, headerRows, inner.Size().Columns)
+	listArea := screen.NewRect(inner.Min.Row+headerRows, inner.Min.Column, listRows, inner.Size().Columns)
+	statusArea := screen.NewRect(inner.Max.Row-1, inner.Min.Column, statusRows, inner.Size().Columns)
+
+	if len(s.scanFindings) == 0 {
+		frame.DrawTextIn(headerArea, "✓ No plaintext secrets detected in project.", screen.TextOptions{Style: screen.Style{Foreground: screen.ColorGreen, Attributes: screen.AttrBold}})
+	} else {
+		frame.DrawTextIn(headerArea, fmt.Sprintf("⚠ Found %d potential secret leak(s) in project:", len(s.scanFindings)), screen.TextOptions{Style: screen.Style{Foreground: screen.ColorYellow, Attributes: screen.AttrBold}})
+	}
+
+	lines := make([]string, len(s.scanFindings))
+	for i, f := range s.scanFindings {
+		lines[i] = formatScanFindingLine(f, listArea.Size().Columns)
+	}
+	s.scanList.SetItems(lines)
+	s.scanList.SetBounds(listArea)
+	s.scanList.Render(frame)
+
+	s.statusBar.SetBounds(statusArea)
+	s.statusBar.Render(frame)
+}
+
+func (s *Screens) renderAudit(frame *screen.Frame, area screen.Rect) {
+	drawBoxTitle(frame, area, "MayFly — Audit Summary", screen.Style{Foreground: screen.ColorCyan, Attributes: screen.AttrBold})
+	inner := screen.Padding{Top: 1, Right: 1, Bottom: 1, Left: 1}.Inset(area)
+	if inner.Empty() {
+		return
+	}
+	headerRows := 2
+	statusRows := 1
+	listRows := max0(inner.Size().Rows - headerRows - statusRows)
+
+	headerArea := screen.NewRect(inner.Min.Row, inner.Min.Column, headerRows, inner.Size().Columns)
+	listArea := screen.NewRect(inner.Min.Row+headerRows, inner.Min.Column, listRows, inner.Size().Columns)
+	statusArea := screen.NewRect(inner.Max.Row-1, inner.Min.Column, statusRows, inner.Size().Columns)
+
+	summaryText := fmt.Sprintf("✓ Tamper-evident audit trail: %d event(s) recorded", len(s.auditEvents))
+	frame.DrawTextIn(headerArea, summaryText, screen.TextOptions{Style: screen.Style{Foreground: screen.ColorCyan, Attributes: screen.AttrBold}})
+
+	lines := make([]string, len(s.auditEvents))
+	for i, e := range s.auditEvents {
+		lines[i] = formatAuditEventLine(e, listArea.Size().Columns)
+	}
+	s.auditList.SetItems(lines)
+	s.auditList.SetBounds(listArea)
+	s.auditList.Render(frame)
+
+	s.statusBar.SetBounds(statusArea)
+	s.statusBar.Render(frame)
 }
 
 func (s *Screens) renderError(frame *screen.Frame, area screen.Rect) {
@@ -345,32 +451,64 @@ func modalRect(area screen.Rect, preferredRows, preferredColumns int) screen.Rec
 	return screen.NewRect(area.Min.Row+(available.Rows-rows)/2, area.Min.Column+(available.Columns-columns)/2, rows, columns)
 }
 
-func (s *Screens) displayLines(width int) []string {
+func (s *Screens) displaySecretLines(width int) []string {
 	lines := make([]string, len(s.secrets))
 	for i, secret := range s.secrets {
-		lines[i] = formatSecretLine(secret.Name, secret.Value, width)
+		lines[i] = formatSecretLine(string(secret.Name), width)
 	}
 	return lines
 }
 
-func formatSecretLine(name, value string, width int) string {
+func formatSecretLine(name string, width int) string {
 	if width <= 0 {
 		return ""
 	}
 	name = displayName(name)
-	masked := screen.MaskSecret(value)
-	if screen.TextWidth(masked) >= width {
-		return masked
-	}
+	masked := "••••••••••"
 	maskWidth := screen.TextWidth(masked)
-	if maskWidth == 0 {
-		return clipDisplay(name, width)
+	if maskWidth >= width {
+		return clipDisplay(masked, width)
 	}
 	nameWidth := width - maskWidth - 2
 	if nameWidth < 1 {
-		return masked
+		return clipDisplay(name, width)
 	}
 	return clipDisplay(name, nameWidth) + strings.Repeat(" ", width-nameWidth-maskWidth) + masked
+}
+
+func formatScanFindingLine(finding domain.ScanFinding, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	loc := finding.Path
+	if finding.Line > 0 {
+		loc = fmt.Sprintf("%s:%d:%d", finding.Path, finding.Line, finding.Column)
+	}
+	sev := strings.ToUpper(string(finding.Severity))
+	line := fmt.Sprintf("[%s] %s — %s", sev, loc, finding.Message)
+	return clipDisplay(displayName(line), width)
+}
+
+func formatAuditEventLine(event domain.AuditEvent, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	timeStr := event.At.UTC().Format("2006-01-02 15:04:05")
+	var extra []string
+	if event.Secret != "" {
+		extra = append(extra, fmt.Sprintf("secret=%s", event.Secret))
+	}
+	if event.Command != "" {
+		extra = append(extra, fmt.Sprintf("cmd=%s", event.Command))
+	}
+	if event.ExitStatus != nil {
+		extra = append(extra, fmt.Sprintf("exit=%d", *event.ExitStatus))
+	}
+	line := fmt.Sprintf("%s  %-18s", timeStr, string(event.Action))
+	if len(extra) > 0 {
+		line += "  " + strings.Join(extra, " ")
+	}
+	return clipDisplay(displayName(line), width)
 }
 
 func displayName(name string) string {
@@ -416,7 +554,7 @@ func (s *Screens) handleGlobal(app *screen.Application, event screen.Event) bool
 		case screen.EventEnter:
 			s.unlock()
 			return true
-		case screen.EventEscape:
+		case screen.EventEscape, screen.EventCtrlD:
 			app.RequestQuit(screen.ExitEscape)
 			return true
 		}
@@ -425,23 +563,28 @@ func (s *Screens) handleGlobal(app *screen.Application, event screen.Event) bool
 			app.RequestQuit(screen.ExitEscape)
 			return true
 		}
-		if event.Type != screen.EventRune {
-			if event.Type == screen.EventEnter && s.list.SelectedIndex() >= 0 {
-				s.openEditor(true)
+		if event.Type == screen.EventEnter && s.list.SelectedIndex() >= 0 {
+			s.openEditor(true)
+			return true
+		}
+		if event.Type == screen.EventRune {
+			switch event.Rune {
+			case 'n', 'N':
+				s.openEditor(false)
+				return true
+			case 'd', 'D':
+				s.openDelete()
+				return true
+			case 's', 'S':
+				s.openScan()
+				return true
+			case 'a', 'A':
+				s.openAudit()
+				return true
+			case 'q', 'Q':
+				app.RequestQuit(screen.ExitRequested)
 				return true
 			}
-			return false
-		}
-		switch event.Rune {
-		case 'n', 'N':
-			s.openEditor(false)
-			return true
-		case 'd', 'D':
-			s.openDelete()
-			return true
-		case 'q', 'Q':
-			app.RequestQuit(screen.ExitRequested)
-			return true
 		}
 	case ModeEditor:
 		switch event.Type {
@@ -458,7 +601,29 @@ func (s *Screens) handleGlobal(app *screen.Application, event screen.Event) bool
 			s.resolveDelete()
 			return true
 		}
+	case ModeScan:
+		if event.Type == screen.EventEscape || event.Type == screen.EventEnter || (event.Type == screen.EventRune && (event.Rune == 'q' || event.Rune == 'Q')) {
+			s.closeToSecrets("Scan completed")
+			return true
+		}
+		if event.Type == screen.EventRune && (event.Rune == 'r' || event.Rune == 'R') {
+			s.openScan()
+			return true
+		}
+	case ModeAudit:
+		if event.Type == screen.EventEscape || event.Type == screen.EventEnter || (event.Type == screen.EventRune && (event.Rune == 'q' || event.Rune == 'Q')) {
+			s.closeToSecrets("")
+			return true
+		}
 	case ModeError:
+		if event.Type == screen.EventEnter || event.Type == screen.EventEscape || event.Type == screen.EventCtrlD {
+			s.dismissError()
+			return true
+		}
+		if event.Type == screen.EventRune && (event.Rune == ' ' || event.Rune == 'q' || event.Rune == 'Q' || event.Rune == 'y' || event.Rune == 'Y' || event.Rune == 'n' || event.Rune == 'N') {
+			s.dismissError()
+			return true
+		}
 		if s.errorBox.Handle(event) {
 			if s.errorBox.Result != screen.DialogPending {
 				s.dismissError()
@@ -472,46 +637,62 @@ func (s *Screens) handleGlobal(app *screen.Application, event screen.Event) bool
 func (s *Screens) unlock() {
 	password := s.password.Value()
 	s.password.SetValue("")
-	if s.opener == nil {
-		s.showError(nil, ModeUnlock, "Unable to unlock vault")
+	if s.service == nil {
+		s.showError(s.app, ModeUnlock, "Unable to unlock vault")
 		return
 	}
-	vault, err := s.opener.Unlock(password)
-	if err != nil || vault == nil {
-		s.showError(nil, ModeUnlock, "Unable to unlock vault")
+	if err := s.service.Unlock(context.Background(), password); err != nil {
+		s.showError(s.app, ModeUnlock, "Unable to unlock vault")
 		return
 	}
-	s.vault = vault
-	if !s.reload() {
-		s.showError(nil, ModeUnlock, "Unable to load secrets")
+	s.loadProjectInfo()
+	if !s.reloadSecrets() {
+		s.showError(s.app, ModeUnlock, "Unable to load secrets")
 		return
 	}
 	s.status = "Vault unlocked"
 	s.setMode(s.app, ModeSecrets)
 }
 
-func (s *Screens) reload() bool {
-	if s.vault == nil {
+func (s *Screens) loadProjectInfo() {
+	if s.service == nil {
+		return
+	}
+	if path, err := s.service.ProjectPath(context.Background()); err == nil && path != "" {
+		s.projectPath = path
+	}
+}
+
+func (s *Screens) reloadSecrets() bool {
+	if s.service == nil {
 		return false
 	}
-	secrets, err := s.vault.Secrets()
+	secrets, err := s.service.ListSecrets(context.Background())
 	if err != nil {
 		return false
 	}
-	s.secrets = append([]Secret(nil), secrets...)
+	s.secrets = append([]domain.Secret(nil), secrets...)
 	return true
 }
 
 func (s *Screens) openEditor(edit bool) {
 	s.editIndex = -1
+	s.editOrigName = ""
 	if edit {
 		index := s.list.SelectedIndex()
 		if index < 0 || index >= len(s.secrets) {
 			return
 		}
+		secret := s.secrets[index]
+		material, err := s.service.GetSecret(context.Background(), secret.Name)
+		if err != nil {
+			s.showError(s.app, ModeSecrets, "Unable to read secret")
+			return
+		}
 		s.editIndex = index
-		s.name.SetValue(s.secrets[index].Name)
-		s.value.SetValue(s.secrets[index].Value)
+		s.editOrigName = secret.Name
+		s.name.SetValue(string(secret.Name))
+		s.value.SetValue(material.Value)
 	} else {
 		s.name.SetValue("")
 		s.value.SetValue("")
@@ -521,32 +702,40 @@ func (s *Screens) openEditor(edit bool) {
 }
 
 func (s *Screens) saveEditor() {
-	name := s.name.Value()
+	name := strings.TrimSpace(s.name.Value())
 	value := s.value.Value()
-	if strings.TrimSpace(name) == "" {
+	if name == "" {
 		s.showError(s.app, ModeEditor, "Secret name is required")
 		return
 	}
-	if s.vault == nil {
+	if s.service == nil {
 		s.showError(s.app, ModeEditor, "Vault unavailable")
 		return
 	}
-	if s.editIndex >= 0 && s.editIndex < len(s.secrets) && s.secrets[s.editIndex].Name != name {
-		if err := s.vault.SetSecret(name, value); err != nil {
-			s.showError(s.app, ModeEditor, "Unable to save secret")
-			return
-		}
-		if err := s.vault.DeleteSecret(s.secrets[s.editIndex].Name); err != nil {
-			s.showError(s.app, ModeEditor, "Unable to save secret")
-			return
-		}
-	} else if err := s.vault.SetSecret(name, value); err != nil {
-		s.showError(s.app, ModeEditor, "Unable to save secret")
+	secretName := domain.SecretName(name)
+	if err := secretName.Validate(); err != nil {
+		s.showError(s.app, ModeEditor, "Invalid secret name")
 		return
 	}
-	s.name.SetValue("")
-	s.value.SetValue("")
-	if !s.reload() {
+
+	if s.editIndex >= 0 && s.editOrigName != "" && s.editOrigName != secretName {
+		if err := s.service.SetSecret(context.Background(), secretName, value); err != nil {
+			s.showError(s.app, ModeEditor, "Unable to save secret")
+			return
+		}
+		if err := s.service.DeleteSecret(context.Background(), s.editOrigName); err != nil {
+			s.showError(s.app, ModeEditor, "Unable to save secret")
+			return
+		}
+	} else {
+		if err := s.service.SetSecret(context.Background(), secretName, value); err != nil {
+			s.showError(s.app, ModeEditor, "Unable to save secret")
+			return
+		}
+	}
+
+	s.clearSensitiveInputs()
+	if !s.reloadSecrets() {
 		s.showError(s.app, ModeEditor, "Unable to load secrets")
 		return
 	}
@@ -560,7 +749,7 @@ func (s *Screens) openDelete() {
 		return
 	}
 	s.deleteIndex = index
-	s.confirm.Message = "Delete selected secret?"
+	s.confirm.Message = fmt.Sprintf("Delete secret %q?", s.secrets[index].Name)
 	s.confirm.Reset()
 	s.status = ""
 	s.setMode(s.app, ModeDelete)
@@ -572,22 +761,55 @@ func (s *Screens) resolveDelete() {
 		s.closeToSecrets("Delete cancelled")
 		return
 	}
-	if result != screen.DialogYes || s.vault == nil || s.deleteIndex < 0 || s.deleteIndex >= len(s.secrets) {
+	if result != screen.DialogYes || s.service == nil || s.deleteIndex < 0 || s.deleteIndex >= len(s.secrets) {
 		s.closeToSecrets("")
 		return
 	}
-	if err := s.vault.DeleteSecret(s.secrets[s.deleteIndex].Name); err != nil {
+	if err := s.service.DeleteSecret(context.Background(), s.secrets[s.deleteIndex].Name); err != nil {
 		s.showError(s.app, ModeDelete, "Unable to delete secret")
 		return
 	}
-	if !s.reload() {
+	if !s.reloadSecrets() {
 		s.showError(s.app, ModeDelete, "Unable to load secrets")
 		return
 	}
 	s.closeToSecrets("Secret deleted")
 }
 
+func (s *Screens) openScan() {
+	if s.service == nil {
+		s.showError(s.app, ModeSecrets, "Scanner unavailable")
+		return
+	}
+	findings, err := s.service.Scan(context.Background())
+	if err != nil {
+		s.showError(s.app, ModeSecrets, "Unable to scan project")
+		return
+	}
+	s.scanFindings = append([]domain.ScanFinding(nil), findings...)
+	s.status = ""
+	s.setMode(s.app, ModeScan)
+}
+
+func (s *Screens) openAudit() {
+	if s.service == nil {
+		s.showError(s.app, ModeSecrets, "Audit log unavailable")
+		return
+	}
+	events, err := s.service.AuditEvents(context.Background())
+	if err != nil {
+		s.showError(s.app, ModeSecrets, "Unable to read audit log")
+		return
+	}
+	s.auditEvents = append([]domain.AuditEvent(nil), events...)
+	s.status = ""
+	s.setMode(s.app, ModeAudit)
+}
+
 func (s *Screens) showError(app *screen.Application, returnMode ScreenMode, message string) {
+	if app == nil {
+		app = s.app
+	}
 	s.returnMode = returnMode
 	s.errorBox.Message = message
 	s.errorBox.Reset()
@@ -614,6 +836,7 @@ func (s *Screens) clearSensitiveInputs() {
 		return
 	}
 	s.password.SetValue("")
+	s.name.SetValue("")
 	s.value.SetValue("")
 }
 
@@ -639,6 +862,12 @@ func (s *Screens) setMode(app *screen.Application, mode ScreenMode) {
 	case ModeDelete:
 		target = s.confirm
 		targets = []screen.Widget{s.confirm}
+	case ModeScan:
+		target = s.scanList
+		targets = []screen.Widget{s.scanList}
+	case ModeAudit:
+		target = s.auditList
+		targets = []screen.Widget{s.auditList}
 	case ModeError:
 		target = s.errorBox
 		targets = []screen.Widget{s.errorBox}
@@ -655,7 +884,7 @@ func (s *Screens) setMode(app *screen.Application, mode ScreenMode) {
 }
 
 func (s *Screens) focusWidgets() []screen.Widget {
-	return []screen.Widget{s.password, s.list, s.name, s.value, s.confirm, s.errorBox}
+	return []screen.Widget{s.password, s.list, s.name, s.value, s.confirm, s.scanList, s.auditList, s.errorBox}
 }
 
 func (s *Screens) focusWidget(app *screen.Application, target screen.Widget) {

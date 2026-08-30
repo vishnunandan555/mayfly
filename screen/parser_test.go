@@ -150,3 +150,16 @@ func TestInputReaderReadsEventsUntilEOF(t *testing.T) {
 		t.Fatalf("ReadEvent after EOF = %v, want EOF", err)
 	}
 }
+
+func FuzzParser(f *testing.F) {
+	f.Add([]byte("hello world\r\n"))
+	f.Add([]byte("\x1b[A\x1b[B\x1b[C\x1b[D\x1b[H\x1b[F"))
+	f.Add([]byte("\x1b[Z\x1b[5~\x1b[6~\x1b[3~"))
+	f.Add([]byte("\x1b[999;888R\x1b[?25h\x00\xff"))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		parser := NewParser()
+		events := parser.Feed(data)
+		_ = append(events, parser.Flush()...)
+	})
+}
