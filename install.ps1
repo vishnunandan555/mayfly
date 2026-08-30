@@ -84,4 +84,16 @@ if ($userPath -notlike "*$InstallDir*") {
     Write-Host "✓ Added $InstallDir to User PATH." -ForegroundColor Green
 }
 
-Write-Host "`nInstallation complete! Run 'mayfly' or 'mf' to start." -ForegroundColor Green
+Write-Host "`n=================================================" -ForegroundColor Cyan
+Write-Host "  🎉 MayFly Installation Complete!" -ForegroundColor Cyan
+Write-Host "=================================================" -ForegroundColor Cyan
+Write-Host "`nGetting Started:"
+Write-Host "  mayfly (or mf)            - Launch Global TUI Dashboard"
+Write-Host "  mf c                      - Open TUI for current project"
+Write-Host "  mf run <command>          - Run app with in-memory secrets"
+Write-Host "  mf --help (or mf help)    - View all available commands"
+Write-Host "`nManagement & Updates:"
+Write-Host "  mf uninstall              - Cleanly uninstall MayFly & remove binaries"
+Write-Host "  irm https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.ps1 | iex -args -Update"
+Write-Host "                            - Update to latest version"
+
