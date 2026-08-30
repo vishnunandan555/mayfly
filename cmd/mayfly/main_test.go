@@ -50,8 +50,17 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("set failed: code=%d, err=%s", code, stderr)
 	}
-	if !strings.Contains(stdout, "Secret DATABASE_URL set") {
+	if !strings.Contains(stdout, "Secret DATABASE_URL saved") {
 		t.Fatalf("unexpected set output: %s", stdout)
+	}
+
+	// 2b. Set secret with empty value
+	code, stdout, stderr = executeMayfly(t, []string{"set", "EMPTY_VAR"}, "masterpass\n\n", projDir)
+	if code != 0 {
+		t.Fatalf("empty set failed: code=%d, err=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Key not created: value was empty") {
+		t.Fatalf("unexpected empty set output: %s", stdout)
 	}
 
 	// 3. Get secret
@@ -61,6 +70,12 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 	}
 	if strings.TrimSpace(stdout) != "postgres://localhost/db" {
 		t.Fatalf("unexpected get output: %s", stdout)
+	}
+
+	// 3b. Get secret with invalid name
+	code, _, stderr = executeMayfly(t, []string{"get", "123-INVALID"}, "masterpass\n", projDir)
+	if code == 0 || !strings.Contains(stderr, "invalid secret name") {
+		t.Fatalf("expected validation error for invalid name on get: code=%d, err=%s", code, stderr)
 	}
 
 	// 4. List secrets
@@ -112,5 +127,11 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 	code, stdout, stderr = executeMayfly(t, []string{"delete", "DATABASE_URL"}, "masterpass\n", projDir)
 	if code != 0 {
 		t.Fatalf("delete failed: code=%d, err=%s", code, stderr)
+	}
+
+	// 10. Version flag
+	code, stdout, stderr = executeMayfly(t, []string{"version"}, "", projDir)
+	if code != 0 || !strings.Contains(stdout, "mayfly v1.0.0") {
+		t.Fatalf("version failed: code=%d, err=%s, out=%s", code, stderr, stdout)
 	}
 }

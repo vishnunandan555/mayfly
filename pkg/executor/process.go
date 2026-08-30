@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"mayfly/pkg/domain"
@@ -81,6 +82,7 @@ func (e *ProcessExecutor) Execute(ctx context.Context, req domain.ExecutionReque
 	for i := range envSlice {
 		envSlice[i] = ""
 	}
+	runtime.KeepAlive(envSlice)
 
 	if err != nil {
 		var exitErr *exec.ExitError

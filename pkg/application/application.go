@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"sync"
 
 	"mayfly/pkg/audit"
@@ -132,6 +133,7 @@ func (s *Service) LockVault() {
 	for i := range s.password {
 		s.password[i] = 0
 	}
+	runtime.KeepAlive(s.password)
 	s.password = nil
 	s.activeSecret = vault.StorageRecord{}
 	s.isUnlocked = false
@@ -176,12 +178,16 @@ func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
 	defer s.mu.Unlock()
 
 	if s.projects != nil {
-		_ = s.projects.Delete(projectID)
+		if err := s.projects.Delete(projectID); err != nil {
+			return err
+		}
 	}
 
 	if s.isUnlocked && s.vault != nil {
 		delete(s.activeSecret.Projects, projectID)
-		_ = s.vault.Save(s.activeSecret, s.password)
+		if err := s.vault.Save(s.activeSecret, s.password); err != nil {
+			return err
+		}
 	}
 
 	if s.auditor != nil {

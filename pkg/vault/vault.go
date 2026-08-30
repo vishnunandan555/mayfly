@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -99,11 +100,20 @@ func (s *Storage) Open(password []byte) (StorageRecord, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, err := os.ReadFile(s.path)
+	info, err := os.Stat(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return StorageRecord{}, ErrVaultMissing
 		}
+		return StorageRecord{}, err
+	}
+	// Self-heal permissions to 0600 if overly permissive
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 {
+		_ = os.Chmod(s.path, 0600)
+	}
+
+	data, err := os.ReadFile(s.path)
+	if err != nil {
 		return StorageRecord{}, err
 	}
 
@@ -340,4 +350,5 @@ func clearBytes(b []byte) {
 	for i := range b {
 		b[i] = 0
 	}
+	runtime.KeepAlive(b)
 }

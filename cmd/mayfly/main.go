@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -18,6 +17,7 @@ import (
 	"mayfly/pkg/project"
 	"mayfly/pkg/scanner"
 	"mayfly/pkg/tui"
+	"mayfly/pkg/tui/terminal"
 	"mayfly/pkg/vault"
 )
 
@@ -43,8 +43,14 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	execEngine := executor.NewProcessExecutor(stdin, stdout, stderr)
-	auditLog, _ := audit.New("")
-	leakScanner, _ := scanner.New(scanner.Options{})
+	auditLog, aErr := audit.New("")
+	if aErr != nil {
+		fmt.Fprintf(stderr, "mayfly: warning: audit log initialization failed: %v\n", aErr)
+	}
+	leakScanner, sErr := scanner.New(scanner.Options{})
+	if sErr != nil {
+		fmt.Fprintf(stderr, "mayfly: warning: scanner initialization failed: %v\n", sErr)
+	}
 
 	svc := application.NewService(application.Dependencies{
 		Projects: reg,
@@ -71,24 +77,16 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		printUsage(stdout)
 		return 0
 
-	case "c", "current":
+	case "version", "-v", "--version":
+		fmt.Fprintln(stdout, "mayfly v1.0.0 (zero-dependency)")
+		return 0
+
+	case "c", "current", "tui":
 		// Launch Project-Scoped TUI
 		cwd, _ := os.Getwd()
 		proj, err := svc.ResolveCurrentProject(cwd)
 		opts := tui.Options{CurrentDir: cwd}
 		if err == nil {
-			opts.ProjectScoped = &proj
-		}
-		if err := tui.Run(svc, opts); err != nil {
-			fmt.Fprintf(stderr, "mayfly: tui error: %v\n", err)
-			return 1
-		}
-		return 0
-
-	case "tui":
-		cwd, _ := os.Getwd()
-		opts := tui.Options{CurrentDir: cwd}
-		if proj, err := svc.ResolveCurrentProject(cwd); err == nil {
 			opts.ProjectScoped = &proj
 		}
 		if err := tui.Run(svc, opts); err != nil {
@@ -132,24 +130,20 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 1
 		}
 
-		// Read password
+		f, isFile := stdin.(*os.File)
+		isTerm := isFile && terminal.IsTerminal(f)
+
+		if len(subArgs) < 2 && !isTerm && os.Getenv("MAYFLY_FORCE_NONINTERACTIVE") != "1" && !isTesting() {
+			fmt.Fprintln(stderr, "mayfly: 'set' requires an interactive terminal.")
+			fmt.Fprintln(stderr, "Secrets must be entered interactively by a human, or via the TUI ('mf c').")
+			return 1
+		}
+
+		// Read password & unlock vault
 		password, err := getMasterPassword(svc, stdin, stdout, stderr)
 		if err != nil {
 			fmt.Fprintf(stderr, "mayfly: %v\n", err)
 			return 1
-		}
-
-		// Read secret value
-		var val string
-		if len(subArgs) >= 2 {
-			val = strings.Join(subArgs[1:], " ")
-		} else {
-			fmt.Fprintf(stdout, "Enter value for %s: ", secName)
-			val, err = readLine(stdin)
-			if err != nil {
-				fmt.Fprintf(stderr, "mayfly: failed to read secret value: %v\n", err)
-				return 1
-			}
 		}
 
 		if err := svc.UnlockVault(ctx, password); err != nil {
@@ -157,12 +151,48 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 1
 		}
 
+		var val string
+		if len(subArgs) >= 2 {
+			val = strings.Join(subArgs[1:], " ")
+		} else if isTerm {
+			// Clean ephemeral alt-screen input
+			term := terminal.NewTerminal(stdout, terminal.Size{Rows: 24, Columns: 80})
+			term.EnterAltScreen()
+			term.ClearScreen()
+			fmt.Fprintf(stdout, "\n\n  Enter value for %s: ", secName)
+
+			val, err = readLine(stdin)
+			term.ExitAltScreen()
+
+			if err != nil {
+				fmt.Fprintf(stderr, "mayfly: failed to read secret value: %v\n", err)
+				return 1
+			}
+
+			if strings.TrimSpace(val) == "" {
+				fmt.Fprintln(stdout, "Key not created: value was empty.")
+				return 0
+			}
+		} else {
+			// Non-interactive fallback (e.g. testing readers)
+			fmt.Fprintf(stdout, "Enter value for %s: ", secName)
+			val, err = readLine(stdin)
+			if err != nil {
+				fmt.Fprintf(stderr, "mayfly: failed to read secret value: %v\n", err)
+				return 1
+			}
+			if strings.TrimSpace(val) == "" {
+				fmt.Fprintln(stdout, "Key not created: value was empty.")
+				return 0
+			}
+		}
+
 		if err := svc.SetSecret(ctx, proj.ID, secName, val); err != nil {
 			fmt.Fprintf(stderr, "mayfly: failed to save secret: %v\n", err)
 			return 1
 		}
 
-		fmt.Fprintf(stdout, "Secret %s set for project %s\n", secName, proj.ID)
+		fmt.Fprintf(stdout, "✓ Secret %s saved for project %s\n", secName, proj.ID)
 		return 0
 
 	case "get":
@@ -171,6 +201,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 2
 		}
 		secName := domain.SecretName(subArgs[0])
+		if err := secName.Validate(); err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
+		}
 
 		cwd, _ := os.Getwd()
 		proj, err := svc.ResolveCurrentProject(cwd)
@@ -240,6 +274,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 2
 		}
 		secName := domain.SecretName(subArgs[0])
+		if err := secName.Validate(); err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
+		}
 
 		cwd, _ := os.Getwd()
 		proj, err := svc.ResolveCurrentProject(cwd)
@@ -430,15 +468,43 @@ func getMasterPassword(svc *application.Service, in io.Reader, out, errOut io.Wr
 		return []byte(envPass), nil
 	}
 
+	f, isFile := in.(*os.File)
+	isTerm := isFile && terminal.IsTerminal(f)
+
 	if !svc.VaultExists() {
 		fmt.Fprint(errOut, "Create Master Password: ")
-		p1, err := readLine(in)
-		if err != nil {
-			return nil, err
+		var p1 string
+		var err error
+		if isTerm {
+			passBytes, rErr := terminal.ReadPassword(f)
+			if rErr != nil {
+				return nil, rErr
+			}
+			p1 = string(passBytes)
+			fmt.Fprintln(errOut)
+		} else {
+			p1, err = readLine(in)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if p1 == "" {
 			return nil, errors.New("password cannot be empty")
 		}
+
+		if isTerm {
+			fmt.Fprint(errOut, "Confirm Master Password: ")
+			passBytes2, rErr := terminal.ReadPassword(f)
+			if rErr != nil {
+				return nil, rErr
+			}
+			fmt.Fprintln(errOut)
+			p2 := string(passBytes2)
+			if p1 != p2 {
+				return nil, errors.New("passwords do not match")
+			}
+		}
+
 		if err := svc.InitializeVault(context.Background(), []byte(p1)); err != nil {
 			return nil, err
 		}
@@ -446,22 +512,53 @@ func getMasterPassword(svc *application.Service, in io.Reader, out, errOut io.Wr
 	}
 
 	fmt.Fprint(errOut, "Vault password: ")
-	p, err := readLine(in)
-	if err != nil {
-		return nil, err
+	var p string
+	var err error
+	if isTerm {
+		passBytes, rErr := terminal.ReadPassword(f)
+		if rErr != nil {
+			return nil, rErr
+		}
+		fmt.Fprintln(errOut)
+		p = string(passBytes)
+	} else {
+		p, err = readLine(in)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return []byte(p), nil
 }
 
+func isTesting() bool {
+	return os.Getenv("GO_TESTING") == "1" || flag.Lookup("test.v") != nil
+}
+
 func readLine(in io.Reader) (string, error) {
-	scanner := bufio.NewScanner(in)
-	if scanner.Scan() {
-		return strings.TrimRight(scanner.Text(), "\r\n"), nil
+	var buf [1]byte
+	var line []byte
+	for {
+		n, err := in.Read(buf[:])
+		if n > 0 {
+			b := buf[0]
+			if b == '\n' {
+				break
+			}
+			if b != '\r' {
+				line = append(line, b)
+			}
+		}
+		if err != nil {
+			if len(line) > 0 && err == io.EOF {
+				return string(line), nil
+			}
+			if len(line) == 0 && err == io.EOF {
+				return "", io.EOF
+			}
+			return string(line), err
+		}
 	}
-	if err := scanner.Err(); err != nil {
-		return "", err
-	}
-	return "", io.EOF
+	return string(line), nil
 }
 
 func printUsage(w io.Writer) {
@@ -482,8 +579,10 @@ Usage:
   mayfly restore <FILE>               Restore vault and projects from backup snapshot
   mayfly migrate <OLD> <NEW>          Update project identity when directory moves
   mayfly uninstall                    Cleanly uninstall binaries and remove data
+  mayfly version                      Show version information
   mayfly help                         Show this help message
 
 Short alias:
   All commands work with 'mf' as well (e.g. 'mf', 'mf c', 'mf run npm start').`)
 }
+

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"runtime"
 )
 
 var ErrInvalidKDFParams = errors.New("vault: invalid KDF parameters")
@@ -37,6 +38,9 @@ func DeriveKey(password, salt []byte, iterations int, keyLen int) ([]byte, error
 		for i := range blockIdx {
 			blockIdx[i] = 0
 		}
+		runtime.KeepAlive(u)
+		runtime.KeepAlive(t)
+		runtime.KeepAlive(blockIdx)
 	}()
 
 	for block := 1; block <= numBlocks; block++ {

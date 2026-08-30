@@ -68,3 +68,80 @@ func Restore(f *os.File, state *State) error {
 	}
 	return nil
 }
+
+// IsTerminal checks if the given file descriptor refers to a terminal on Linux.
+func IsTerminal(f *os.File) bool {
+	if f == nil {
+		return false
+	}
+	var termios syscall.Termios
+	_, _, err := syscall.Syscall(
+		syscall.SYS_IOCTL,
+		f.Fd(),
+		syscall.TCGETS,
+		uintptr(unsafe.Pointer(&termios)),
+	)
+	return err == 0
+}
+
+// ReadPassword reads a line from a terminal with echo disabled on Linux.
+func ReadPassword(f *os.File) ([]byte, error) {
+	if f == nil {
+		return nil, os.ErrInvalid
+	}
+	fd := f.Fd()
+	var oldState syscall.Termios
+	_, _, err := syscall.Syscall(
+		syscall.SYS_IOCTL,
+		fd,
+		syscall.TCGETS,
+		uintptr(unsafe.Pointer(&oldState)),
+	)
+	if err != 0 {
+		return nil, err
+	}
+
+	noEcho := oldState
+	noEcho.Lflag &^= syscall.ECHO
+	noEcho.Lflag |= syscall.ICANON | syscall.ISIG
+
+	_, _, err = syscall.Syscall(
+		syscall.SYS_IOCTL,
+		fd,
+		syscall.TCSETS,
+		uintptr(unsafe.Pointer(&noEcho)),
+	)
+	if err != 0 {
+		return nil, err
+	}
+
+	defer func() {
+		_, _, _ = syscall.Syscall(
+			syscall.SYS_IOCTL,
+			fd,
+			syscall.TCSETS,
+			uintptr(unsafe.Pointer(&oldState)),
+		)
+	}()
+
+	var buf [1]byte
+	var pass []byte
+	for {
+		n, rErr := f.Read(buf[:])
+		if n > 0 {
+			b := buf[0]
+			if b == '\n' || b == '\r' {
+				break
+			}
+			pass = append(pass, b)
+		}
+		if rErr != nil {
+			if len(pass) > 0 {
+				break
+			}
+			return nil, rErr
+		}
+	}
+	return pass, nil
+}
+

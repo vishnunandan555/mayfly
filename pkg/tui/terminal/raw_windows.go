@@ -75,3 +75,55 @@ func Restore(f *os.File, state *State) error {
 	procSetConsoleMode.Call(uintptr(hOut), uintptr(state.outMode))
 	return nil
 }
+
+// IsTerminal checks if the given file descriptor refers to a Windows console.
+func IsTerminal(f *os.File) bool {
+	if f == nil {
+		return false
+	}
+	var mode uint32
+	r1, _, _ := procGetConsoleMode.Call(uintptr(f.Fd()), uintptr(unsafe.Pointer(&mode)))
+	return r1 != 0
+}
+
+// ReadPassword reads a line from a Windows console with echo disabled.
+func ReadPassword(f *os.File) ([]byte, error) {
+	if f == nil {
+		return nil, os.ErrInvalid
+	}
+	hIn := syscall.Handle(f.Fd())
+	var inMode uint32
+	r1, _, err := procGetConsoleMode.Call(uintptr(hIn), uintptr(unsafe.Pointer(&inMode)))
+	if r1 == 0 {
+		return nil, err
+	}
+
+	noEcho := (inMode &^ enableEchoInput) | enableLineInput | enableProcessedInput
+	r1, _, err = procSetConsoleMode.Call(uintptr(hIn), uintptr(noEcho))
+	if r1 == 0 {
+		return nil, err
+	}
+
+	defer procSetConsoleMode.Call(uintptr(hIn), uintptr(inMode))
+
+	var buf [1]byte
+	var pass []byte
+	for {
+		n, rErr := f.Read(buf[:])
+		if n > 0 {
+			b := buf[0]
+			if b == '\n' || b == '\r' {
+				break
+			}
+			pass = append(pass, b)
+		}
+		if rErr != nil {
+			if len(pass) > 0 {
+				break
+			}
+			return nil, rErr
+		}
+	}
+	return pass, nil
+}
+

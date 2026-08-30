@@ -73,12 +73,23 @@ func (l *Log) initOrVerify() error {
 		return err
 	}
 
+	lastHash, seq, err := l.scanAndVerifyLocked()
+	if err != nil {
+		return err
+	}
+
+	l.lastHash = lastHash
+	l.sequence = seq
+	return nil
+}
+
+func (l *Log) scanAndVerifyLocked() (string, uint64, error) {
 	file, err := os.Open(l.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return GenesisHash, 0, nil
 		}
-		return err
+		return "", 0, err
 	}
 	defer file.Close()
 
@@ -94,33 +105,31 @@ func (l *Log) initOrVerify() error {
 
 		var event domain.AuditEvent
 		if err := json.Unmarshal(line, &event); err != nil {
-			return fmt.Errorf("%w: invalid JSON format", ErrAuditCorrupt)
+			return "", 0, fmt.Errorf("%w: invalid JSON format", ErrAuditCorrupt)
 		}
 
 		seq++
 		if event.Sequence != seq {
-			return fmt.Errorf("%w: sequence mismatch (expected %d, got %d)", ErrAuditCorrupt, seq, event.Sequence)
+			return "", 0, fmt.Errorf("%w: sequence mismatch at %d (expected %d, got %d)", ErrAuditCorrupt, seq, seq, event.Sequence)
 		}
 
 		if event.PreviousHash != prevHash {
-			return fmt.Errorf("%w: broken previous hash link at sequence %d", ErrAuditCorrupt, seq)
+			return "", 0, fmt.Errorf("%w: broken previous hash link at sequence %d", ErrAuditCorrupt, seq)
 		}
 
 		computedHash := computeHash(event)
 		if computedHash != event.Hash {
-			return fmt.Errorf("%w: invalid hash checksum at sequence %d", ErrAuditCorrupt, seq)
+			return "", 0, fmt.Errorf("%w: invalid hash checksum at sequence %d", ErrAuditCorrupt, seq)
 		}
 
 		prevHash = event.Hash
 	}
 
 	if err := scanner.Err(); err != nil {
-		return err
+		return "", 0, err
 	}
 
-	l.lastHash = prevHash
-	l.sequence = seq
-	return nil
+	return prevHash, seq, nil
 }
 
 func computeHash(event domain.AuditEvent) string {
@@ -189,48 +198,8 @@ func (l *Log) Verify(ctx context.Context) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	file, err := os.Open(l.path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	prevHash := GenesisHash
-	var seq uint64 = 0
-
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-
-		var event domain.AuditEvent
-		if err := json.Unmarshal(line, &event); err != nil {
-			return fmt.Errorf("%w: invalid JSON format", ErrAuditCorrupt)
-		}
-
-		seq++
-		if event.Sequence != seq {
-			return fmt.Errorf("%w: sequence mismatch at %d", ErrAuditCorrupt, seq)
-		}
-
-		if event.PreviousHash != prevHash {
-			return fmt.Errorf("%w: broken previous hash at %d", ErrAuditCorrupt, seq)
-		}
-
-		computedHash := computeHash(event)
-		if computedHash != event.Hash {
-			return fmt.Errorf("%w: invalid hash checksum at %d", ErrAuditCorrupt, seq)
-		}
-
-		prevHash = event.Hash
-	}
-
-	return scanner.Err()
+	_, _, err := l.scanAndVerifyLocked()
+	return err
 }
 
 // Events returns all recorded audit events in chronological order.
