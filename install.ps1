@@ -56,27 +56,49 @@ if ($Update) {
 } else {
     Write-Host "  Installing MayFly (Zero-Dependency Secrets)..." -ForegroundColor Cyan
 }
-Write-Host "=================================================" -ForegroundColor Cyan
+Write-Host "=================================================`n" -ForegroundColor Cyan
+
+Write-Host "Choose command alias to install:"
+Write-Host "  [1] Both 'mayfly' and 'mf' (Default — press Enter)"
+Write-Host "  [2] Only 'mayfly'"
+Write-Host "  [3] Only 'mf'`n"
+
+$aliasChoice = Read-Host "Select option [1/2/3]"
+if ([string]::IsNullOrWhiteSpace($aliasChoice)) { $aliasChoice = "1" }
 
 if (!(Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 }
 
-Write-Host "Building mayfly.exe binary..."
+Write-Host "`nBuilding binary..."
 $env:CGO_ENABLED = "0"
 go build -trimpath -ldflags="-s -w" -o "$InstallDir\mayfly.exe" .\cmd\mayfly
 
-# Copy to mf.exe
-Copy-Item -Force "$InstallDir\mayfly.exe" "$InstallDir\mf.exe"
+switch ($aliasChoice) {
+    "2" {
+        Remove-Item "$InstallDir\mf.exe" -ErrorAction SilentlyContinue
+        Write-Host "✓ Installed mayfly.exe -> $InstallDir\mayfly.exe" -ForegroundColor Green
+    }
+    "3" {
+        Move-Item -Force "$InstallDir\mayfly.exe" "$InstallDir\mf.exe"
+        Write-Host "✓ Installed mf.exe -> $InstallDir\mf.exe" -ForegroundColor Green
+    }
+    Default {
+        Copy-Item -Force "$InstallDir\mayfly.exe" "$InstallDir\mf.exe"
+        Write-Host "✓ Installed mayfly.exe -> $InstallDir\mayfly.exe" -ForegroundColor Green
+        Write-Host "✓ Installed mf.exe     -> $InstallDir\mf.exe" -ForegroundColor Green
+    }
+}
 
-Write-Host "✓ Installed mayfly.exe -> $InstallDir\mayfly.exe" -ForegroundColor Green
-Write-Host "✓ Installed mf.exe     -> $InstallDir\mf.exe" -ForegroundColor Green
-
-# Add to user PATH if missing
+# Prompt before adding to User PATH if missing
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($userPath -notlike "*$InstallDir*") {
-    [Environment]::SetEnvironmentVariable("Path", "$userPath;$InstallDir", "User")
-    Write-Host "✓ Added $InstallDir to User PATH." -ForegroundColor Green
+    Write-Host "`nNote: '$InstallDir' is not in your current User PATH."
+    $addPath = Read-Host "Add '$InstallDir' to User PATH? [Y/n]"
+    if ([string]::IsNullOrWhiteSpace($addPath) -or $addPath -eq "y" -or $addPath -eq "Y") {
+        [Environment]::SetEnvironmentVariable("Path", "$userPath;$InstallDir", "User")
+        Write-Host "✓ Added $InstallDir to User PATH." -ForegroundColor Green
+    }
 }
 
 Write-Host "`n=================================================" -ForegroundColor Cyan

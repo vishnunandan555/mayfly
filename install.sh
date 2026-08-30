@@ -79,6 +79,11 @@ fi
 # -------------------------------------------------------------
 # INSTALL / UPDATE MODE
 # -------------------------------------------------------------
+# Reattach stdin if running piped via curl
+if [ -e /dev/tty ]; then
+    exec < /dev/tty
+fi
+
 echo "================================================="
 if [ "$UPDATE" = true ]; then
     echo "  Updating MayFly..."
@@ -86,26 +91,46 @@ else
     echo "  Installing MayFly (Zero-Dependency Secrets)..."
 fi
 echo "================================================="
+echo ""
+
+# Prompt for command alias selection
+echo "Choose command alias to install:"
+echo "  [1] Both 'mayfly' and 'mf' (Default — press Enter)"
+echo "  [2] Only 'mayfly'"
+echo "  [3] Only 'mf'"
+echo ""
+read -p "Select option [1/2/3]: " -r ALIAS_CHOICE
+ALIAS_CHOICE="${ALIAS_CHOICE:-1}"
 
 mkdir -p "${INSTALL_DIR}"
 
 # Build binary
+echo ""
+echo "Building binary..."
 if [ -n "$SRC_DIR" ] && [ -f "${SRC_DIR}/go.mod" ]; then
-    echo "Building from source..."
     cd "${SRC_DIR}"
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${INSTALL_DIR}/mayfly" ./cmd/mayfly
 else
-    echo "Building mayfly binary..."
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${INSTALL_DIR}/mayfly" ./cmd/mayfly
 fi
 
 chmod +x "${INSTALL_DIR}/mayfly"
 
-# Create 'mf' alias symlink
-ln -sf "${INSTALL_DIR}/mayfly" "${INSTALL_DIR}/mf"
-
-echo "✓ Installed 'mayfly' -> ${INSTALL_DIR}/mayfly"
-echo "✓ Installed 'mf'     -> ${INSTALL_DIR}/mf"
+case "$ALIAS_CHOICE" in
+    2)
+        rm -f "${INSTALL_DIR}/mf" 2>/dev/null || true
+        echo "✓ Installed 'mayfly' -> ${INSTALL_DIR}/mayfly"
+        ;;
+    3)
+        mv "${INSTALL_DIR}/mayfly" "${INSTALL_DIR}/mf"
+        echo "✓ Installed 'mf' -> ${INSTALL_DIR}/mf"
+        ;;
+    *)
+        ln -sf "${INSTALL_DIR}/mayfly" "${INSTALL_DIR}/mf"
+        echo "✓ Installed 'mayfly' -> ${INSTALL_DIR}/mayfly"
+        echo "✓ Installed 'mf'     -> ${INSTALL_DIR}/mf"
+        ;;
+esac
 
 # Ensure PATH is configured
 PATH_UPDATED=false
@@ -128,12 +153,20 @@ case ":$PATH:" in
             RC_FILE="${HOME}/.config/fish/config.fish"
         fi
 
-        if [ -n "$RC_FILE" ] && [ -f "$RC_FILE" ]; then
-            if ! grep -q "Added by MayFly" "$RC_FILE"; then
-                echo "" >> "$RC_FILE"
-                echo "# Added by MayFly installer" >> "$RC_FILE"
-                echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$RC_FILE"
-                PATH_UPDATED=true
+        if [ -n "$RC_FILE" ]; then
+            echo ""
+            echo "Note: '${INSTALL_DIR}' is not currently in your system PATH."
+            read -p "Add '${INSTALL_DIR}' to $(basename "$RC_FILE")? [Y/n]: " -r ADD_PATH_RESP
+            ADD_PATH_RESP="${ADD_PATH_RESP:-y}"
+
+            if [[ "$ADD_PATH_RESP" =~ ^[Yy]$ ]]; then
+                if ! grep -q "Added by MayFly" "$RC_FILE" 2>/dev/null; then
+                    echo "" >> "$RC_FILE"
+                    echo "# Added by MayFly installer" >> "$RC_FILE"
+                    echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$RC_FILE"
+                    PATH_UPDATED=true
+                    echo "✓ Added PATH export to $(basename "$RC_FILE")"
+                fi
             fi
         fi
         ;;
