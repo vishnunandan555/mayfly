@@ -27,6 +27,18 @@ func DeriveKey(password, salt []byte, iterations int, keyLen int) ([]byte, error
 		blockIdx [4]byte
 	)
 
+	defer func() {
+		for i := range u {
+			u[i] = 0
+		}
+		for i := range t {
+			t[i] = 0
+		}
+		for i := range blockIdx {
+			blockIdx[i] = 0
+		}
+	}()
+
 	for block := 1; block <= numBlocks; block++ {
 		binary.BigEndian.PutUint32(blockIdx[:], uint32(block))
 

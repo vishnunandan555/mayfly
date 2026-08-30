@@ -52,7 +52,6 @@ type Screens struct {
 	confirmDlg   *widget.ConfirmDialog
 	editOrigName domain.SecretName
 	revealValue  bool
-	outWriter    terminal.Terminal
 }
 
 func NewScreens(svc *application.Service, currentDir string) *Screens {

@@ -107,12 +107,27 @@ func (g *ProjectCardGrid) Draw(f *terminal.Frame, bounds terminal.Rect) {
 	}
 	cardHeight := 5
 
+	availableHeight := bounds.Max.Row - bounds.Min.Row - 3
+	visibleRows := availableHeight / (cardHeight + 1)
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	selectedRow := g.Selected / 2
+	scrollRow := 0
+	if selectedRow >= visibleRows {
+		scrollRow = selectedRow - visibleRows + 1
+	}
+
 	startRow := bounds.Min.Row + 2
 
 	for i, card := range g.Cards {
-		colIdx := i % 2
-		rowIdx := i / 2
+		rowIdx := (i / 2) - scrollRow
+		if rowIdx < 0 || rowIdx >= visibleRows {
+			continue
+		}
 
+		colIdx := i % 2
 		cardRow := startRow + rowIdx*(cardHeight+1)
 		cardCol := bounds.Min.Column + 2 + colIdx*(cardWidth+2)
 
