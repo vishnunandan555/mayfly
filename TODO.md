@@ -9,15 +9,8 @@ This document tracks all remaining tasks required to polish, verify, maximize sc
 
 ## 🚨 Phase 1: Critical Submission Blockers (Must Do First)
 
-- [ ] **1.1 Merge `application-layer` into `main`**
-  - **Why:** The default branch on GitHub currently only contains the early TUI boilerplate and `guides/`. The entire application backend (`vault/`, `executor/`, `audit/`, `scanner/`, `cmd/mayfly/`, etc.) is on `origin/application-layer`.
-  - **Action:**
-    ```bash
-    git checkout -b application-layer origin/application-layer
-    git checkout main
-    git merge application-layer --no-ff -m "feat: merge complete application layer into main"
-    git push origin main
-    ```
+- [x] **1.1 Merge `application-layer` into `main`**
+  - **Status:** Completed. All subsystems, tests, documentation, and tooling from `origin/application-layer` are merged cleanly into `main`.
 - [ ] **1.2 Verify `go.mod` is 100% Dependency-Free**
   - Ensure `go.mod` contains no `require` block, no `golang.org/x/` packages, and no vendored code.
   - Run `./zero-dep-audit.sh` and ensure it outputs `ZERO-DEPENDENCY AUDIT: 100% COMPLIANT`.
