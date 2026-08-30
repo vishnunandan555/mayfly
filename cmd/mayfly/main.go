@@ -386,17 +386,20 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 0
 
 	case "uninstall":
-		fmt.Fprintln(stdout, "MayFly Uninstaller")
-		fmt.Fprintln(stdout, "-------------------------------------------------")
-		fmt.Fprintln(stdout, "Options for encrypted vaults and data (~/.mayfly):")
-		fmt.Fprintln(stdout, "  [y] - Fully remove everything (binaries + ~/.mayfly vaults)")
-		fmt.Fprintln(stdout, "  [s] - Safe uninstall (remove binaries & PATH, keep ~/.mayfly)")
-		fmt.Fprintln(stdout, "  [n] - Cancel uninstallation")
+		fmt.Fprintln(stdout, "=================================================")
+		fmt.Fprintln(stdout, "  MayFly Complete Uninstaller")
+		fmt.Fprintln(stdout, "=================================================")
+		fmt.Fprintln(stdout, "WARNING: This will completely remove the 'mayfly' and 'mf'")
+		fmt.Fprintln(stdout, "binaries, clean your shell PATH, and PERMANENTLY DELETE")
+		fmt.Fprintln(stdout, "all encrypted secrets in ~/.mayfly.")
 		fmt.Fprintln(stdout, "")
-		fmt.Fprint(stdout, "Choose an option [y/s/n]: ")
+		fmt.Fprint(stdout, "Are you sure you want to completely uninstall MayFly? [y/N]: ")
 
 		resp, _ := readLine(stdin)
-		choice := strings.ToLower(strings.TrimSpace(resp))
+		if strings.ToLower(strings.TrimSpace(resp)) != "y" {
+			fmt.Fprintln(stdout, "Uninstallation canceled.")
+			return 0
+		}
 
 		home, _ := os.UserHomeDir()
 		binPaths := []string{
@@ -405,29 +408,15 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			"/usr/local/bin/mayfly",
 			"/usr/local/bin/mf",
 		}
-
-		switch choice {
-		case "y":
-			for _, bp := range binPaths {
-				_ = os.Remove(bp)
-			}
-			_ = os.RemoveAll(filepath.Join(home, ".mayfly"))
-			fmt.Fprintln(stdout, "✓ Removed mayfly and mf binaries.")
-			fmt.Fprintln(stdout, "✓ Removed ~/.mayfly directory and all encrypted vaults.")
-			fmt.Fprintln(stdout, "MayFly has been completely uninstalled.")
-			return 0
-		case "s":
-			for _, bp := range binPaths {
-				_ = os.Remove(bp)
-			}
-			fmt.Fprintln(stdout, "✓ Removed mayfly and mf binaries.")
-			fmt.Fprintln(stdout, "✓ Kept ~/.mayfly intact for future use.")
-			fmt.Fprintln(stdout, "MayFly has been uninstalled.")
-			return 0
-		default:
-			fmt.Fprintln(stdout, "Uninstallation canceled.")
-			return 0
+		for _, bp := range binPaths {
+			_ = os.Remove(bp)
 		}
+
+		_ = os.RemoveAll(filepath.Join(home, ".mayfly"))
+		fmt.Fprintln(stdout, "✓ Removed mayfly and mf binaries.")
+		fmt.Fprintln(stdout, "✓ Removed ~/.mayfly directory and all encrypted vaults.")
+		fmt.Fprintln(stdout, "MayFly has been completely and cleanly uninstalled from your system.")
+		return 0
 
 	default:
 		fmt.Fprintf(stderr, "mayfly: unknown command %q\n\n", subcmd)

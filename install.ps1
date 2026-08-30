@@ -17,17 +17,14 @@ $VaultDir = "$HOME\.mayfly"
 
 if ($Uninstall) {
     Write-Host "=================================================" -ForegroundColor Yellow
-    Write-Host "  MayFly Windows Uninstaller" -ForegroundColor Yellow
+    Write-Host "  MayFly Windows Complete Uninstaller" -ForegroundColor Yellow
     Write-Host "=================================================" -ForegroundColor Yellow
-    Write-Host "This will remove mayfly.exe and mf.exe from your system.`n"
-    Write-Host "Options for encrypted vaults and data (~/.mayfly):"
-    Write-Host "  [y] - Fully remove everything (binaries + ~/.mayfly vaults)"
-    Write-Host "  [s] - Safe uninstall (remove binaries & PATH, keep ~/.mayfly vaults)"
-    Write-Host "  [n] - Cancel uninstallation`n"
+    Write-Host "WARNING: This will completely remove mayfly.exe and mf.exe,"
+    Write-Host "clean your User PATH, and PERMANENTLY DELETE all encrypted"
+    Write-Host "secrets in $VaultDir.`n"
 
-    $choice = (Read-Host "Choose an option [y/s/n]").ToLower()
-
-    if ($choice -eq "n") {
+    $resp = Read-Host "Are you sure you want to completely uninstall MayFly? [y/N]"
+    if ($resp -ne "y" -and $resp -ne "Y") {
         Write-Host "Uninstallation canceled."
         exit 0
     }
@@ -44,14 +41,12 @@ if ($Uninstall) {
         Write-Host "✓ Cleaned $InstallDir from User PATH." -ForegroundColor Green
     }
 
-    if ($choice -eq "y" -and (Test-Path $VaultDir)) {
+    if (Test-Path $VaultDir) {
         Remove-Item -Recurse -Force $VaultDir
         Write-Host "✓ Removed $VaultDir directory and all encrypted vaults." -ForegroundColor Green
-    } elseif ($choice -eq "s") {
-        Write-Host "✓ Kept $VaultDir intact for future use." -ForegroundColor Green
     }
 
-    Write-Host "`nMayFly uninstallation complete." -ForegroundColor Green
+    Write-Host "`nMayFly has been completely and cleanly uninstalled from your system." -ForegroundColor Green
     exit 0
 }
 
