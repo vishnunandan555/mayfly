@@ -1,0 +1,8 @@
+{
+  "title": "Architecture",
+  "pages": [
+    "security-model",
+    "in-memory-injection",
+    "audit-chain"
+  ]
+}

@@ -1,0 +1,63 @@
+---
+title: "mayfly run"
+description: Execute child processes with in-memory decrypted environment variables.
+---
+
+## Synopsis
+
+```bash
+mayfly run [--isolated] [--] <command> [args...]
+```
+
+---
+
+## Description
+
+The `run` command:
+1. Resolves the current project identity.
+2. Decrypts the project secrets into volatile memory.
+3. Merges existing system environment variables with the project secrets (project secrets take precedence).
+4. Spawns the specified binary via `os/exec`.
+5. Forwards standard I/O (stdin, stdout, stderr) and propagates OS signals (`SIGINT`, `SIGTERM`).
+6. Cleans up decrypted memory buffers when the process exits.
+
+---
+
+## Examples
+
+### Node.js / NPM Application
+
+```bash
+mayfly run npm run dev
+```
+
+### Python FastAPI / Flask
+
+```bash
+mayfly run uvicorn app.main:app --reload --port 8000
+```
+
+### Docker Compose
+
+```bash
+mayfly run docker compose up -d
+```
+
+### Running with Flag Disambiguation (`--`)
+
+If your target command uses flags that collide with MayFly flags, use `--` to separate them:
+
+```bash
+mayfly run -- go test -v -cover ./...
+```
+
+---
+
+## Options
+
+### `--isolated`
+When enabled, MayFly does not pass host system environment variables to the child process. The child process receives **only** the secrets stored in the MayFly vault alongside minimal required system paths (`PATH`, `HOME`).
+
+```bash
+mayfly run --isolated ./run-secure-job.sh
+```

@@ -1,0 +1,67 @@
+---
+title: Cryptographic Audit Trail
+description: Technical architecture of MayFly's tamper-evident SHA-256 hash-chained audit logging system.
+---
+
+## Overview
+
+MayFly includes an integrated audit logging subsystem stored at `~/.mayfly/audit.log`.
+
+To prevent attackers or compromised processes from retroactively altering, deleting, or reordering log entries, MayFly maintains an authenticated **SHA-256 hash chain**.
+
+---
+
+## Hash-Chained Structure
+
+Every audit event is cryptographically linked to the preceding event hash:
+
+```
+Entry 0 (Genesis):
+  Hash[0] = SHA256("GENESIS:" + Timestamp + EventData)
+
+Entry 1:
+  Hash[1] = SHA256(Hash[0] + ":" + Timestamp + EventData)
+
+Entry 2:
+  Hash[2] = SHA256(Hash[1] + ":" + Timestamp + EventData)
+```
+
+If an attacker attempts to modify or delete Entry 1 in the log file, the hash chain from Entry 2 onward will fail cryptographic verification.
+
+---
+
+## Audit Event Schema
+
+Each line in `~/.mayfly/audit.log` is a structured JSON record:
+
+```json
+{
+  "sequence": 42,
+  "timestamp": "2026-08-31T04:00:00Z",
+  "action": "SECRET_INJECT",
+  "project_id": "2050:1493028",
+  "command": "npm run dev",
+  "prev_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "hash": "7a356b27e8d2e8b15d2a901844b2f2d93e11fa9a279c6d36e768e1c6b52c0021"
+}
+```
+
+### Logged Actions
+- `VAULT_INIT`: Project vault creation.
+- `SECRET_SET`: Variable created or updated.
+- `SECRET_DELETE`: Variable removed.
+- `SECRET_INJECT`: Target process executed with injected secrets.
+- `SCAN_RUN`: Repository scanner executed for secret leaks.
+- `TAMPER_DETECTED`: Checkpoint integrity verification alert.
+
+---
+
+## Integrity Verification
+
+The audit log can be cryptographically verified at any time using:
+
+```bash
+mayfly audit verify
+```
+
+MayFly will traverse the complete log file from Genesis to the latest sequence number, recalculating all hashes and verifying continuity.

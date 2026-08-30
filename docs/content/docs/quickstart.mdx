@@ -1,0 +1,116 @@
+---
+title: Quickstart
+description: Install MayFly, initialize a project vault, store credentials, and execute commands with in-memory injection.
+---
+
+## Installation
+
+### Binary Installation (Linux & macOS)
+
+To install MayFly using the automated installer:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.sh | bash
+```
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.ps1 | iex
+```
+
+### Building from Source
+
+MayFly requires Go 1.22+ and uses only the Go standard library:
+
+```bash
+git clone https://github.com/vishnunandan555/mayfly.git
+cd mayfly
+go build -ldflags="-s -w" -o /usr/local/bin/mayfly ./cmd/mayfly
+```
+
+Verify the installation:
+
+```bash
+mayfly version
+```
+
+---
+
+## Basic Usage
+
+### 1. Initialize the Vault
+
+Navigate to your project directory and initialize the encrypted storage:
+
+```bash
+cd /path/to/my-project
+mayfly init
+```
+
+You will be prompted to enter a master password. MayFly will derive a 256-bit AES key using PBKDF2-HMAC-SHA256 (600,000 iterations default) and initialize the vault structure.
+
+### 2. Store Project Secrets
+
+Add environment variables to the project vault:
+
+```bash
+mayfly set DATABASE_URL="postgres://user:password@localhost:5432/app"
+mayfly set STRIPE_SECRET_KEY="sk_live_0123456789abcdef"
+mayfly set JWT_SECRET="super-secret-token"
+```
+
+To set multiline or sensitive variables interactively without shell history logging:
+
+```bash
+mayfly set --interactive API_KEY
+```
+
+### 3. List Registered Variables
+
+View the keys stored for the current project:
+
+```bash
+mayfly list
+```
+
+Values are masked by default to prevent shoulder surfing and screen capture leakage.
+
+### 4. Execute Application via MayFly
+
+Run your application command using `mayfly run`:
+
+```bash
+mayfly run npm run dev
+```
+
+For Python applications:
+
+```bash
+mayfly run python main.py
+```
+
+For Go or compiled binaries:
+
+```bash
+mayfly run ./bin/server
+```
+
+MayFly will:
+1. Identify the current project.
+2. Prompt for your master password (or verify active session token).
+3. Decrypt the project secrets in memory.
+4. Pass the environment variables directly into the launched process.
+5. Exit cleanly when the child process terminates, zeroing memory references.
+
+---
+
+## Removing Existing Plaintext Files
+
+If your workspace previously contained `.env` files, remove them from disk:
+
+```bash
+rm -f .env .env.local .env.production
+```
+
+Ensure `.env` files remain in `.gitignore` as a safeguard against accidental creation.

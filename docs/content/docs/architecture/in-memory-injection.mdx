@@ -1,0 +1,60 @@
+---
+title: In-Memory Process Injection
+description: How MayFly launches target processes and injects decrypted credentials directly into process environment blocks without temporary files.
+---
+
+## Process Spawning Architecture
+
+MayFly avoids shell wrappers and temporary configuration files by using direct OS-level execution primitives (`os/exec` in Go).
+
+When `mayfly run <command> [args...]` is executed:
+
+```
+[MayFly CLI]
+    │
+    ├── 1. Resolve Project Inode & Canonical Path
+    ├── 2. Decrypt Secrets into Transient Memory (Go RAM)
+    ├── 3. Build Process Environment: os.Environ() + Decrypted Key-Values
+    ├── 4. os/exec.Command(command, args...)
+    │       │
+    │       └── sets cmd.Env = mergedEnv
+    │       └── sets cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+    ├── 5. cmd.Run() / cmd.Wait()
+    └── 6. Zero out decrypted memory structures upon exit
+```
+
+---
+
+## Direct Execution vs Shell Evaluation
+
+Many CLI tools launch commands via subshell strings (e.g., `/bin/sh -c "npm run dev"`). This introduces several critical security risks:
+
+| Security Vector | Shell Wrappers (`/bin/sh -c`) | MayFly Direct Execution (`os/exec`) |
+| :--- | :--- | :--- |
+| **Shell History** | Sensitive arguments may be written to `~/.bash_history` | Commands bypass shell history entirely |
+| **Shell Variable Expansion** | Unintended variable interpolation or command injection | Arguments passed as literal argv array |
+| **Intermediate Subshells** | Environment exported across child subshell forks | Secrets scoped strictly to target process |
+| **Signals & Propagation** | Signals (SIGINT, SIGTERM) can be trapped or lost | Signals passed directly to target process |
+
+---
+
+## Deterministic Project Identification
+
+To prevent secrets from leaking across repositories with identical directory names (e.g. `/home/user/code/app` vs `/home/user/other/app`), MayFly binds vaults to unique filesystem markers:
+
+### Linux / POSIX Identification
+MayFly reads the filesystem device ID (`st_dev`) and inode number (`st_ino`) of the canonical root directory via `syscall.Stat`:
+
+```go
+var stat syscall.Stat_t
+err := syscall.Stat(canonicalPath, &stat)
+projectID := fmt.Sprintf("%d:%d", stat.Dev, stat.Ino)
+```
+
+Even if symbolic links or relative paths are used, MayFly resolves the canonical hardware inode to ensure exact project isolation.
+
+---
+
+## Memory Cleanup
+
+Decrypted secret byte slices are released upon process termination. When the child process exits, MayFly's memory pages containing decrypted values are freed, preventing persistence in lingering daemons.

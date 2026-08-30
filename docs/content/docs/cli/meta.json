@@ -1,0 +1,10 @@
+{
+  "title": "CLI Reference",
+  "pages": [
+    "overview",
+    "run",
+    "vault",
+    "scan",
+    "audit"
+  ]
+}

@@ -1,0 +1,102 @@
+---
+title: Vault Management Commands
+description: Reference for initializing, storing, reading, editing, and deleting vault secrets.
+---
+
+## mayfly init
+
+Initialize an encrypted vault container for the current directory.
+
+```bash
+mayfly init [--iterations 600000]
+```
+
+### Flags
+- `--iterations <count>`: Specify custom PBKDF2 iteration rounds (default: `600000`, minimum: `100000`).
+
+---
+
+## mayfly set
+
+Assign or update an environment variable in the current project vault.
+
+```bash
+mayfly set <KEY>=<VALUE>
+```
+
+### Interactive Setting
+
+To prevent values from being saved in shell history (`.bash_history` / `.zsh_history`):
+
+```bash
+mayfly set --interactive API_KEY
+```
+
+You will be prompted to enter the secret value securely with echo disabled.
+
+---
+
+## mayfly get
+
+Retrieve the decrypted value of a secret key.
+
+```bash
+mayfly get <KEY> [--unmask]
+```
+
+### Flags
+- `--unmask`: Output the raw plaintext string directly to stdout (useful for piping into tools).
+
+```bash
+mayfly get AWS_ACCESS_KEY_ID --unmask
+```
+
+---
+
+## mayfly list
+
+List all secret variable keys registered in the project.
+
+```bash
+mayfly list [--format=table|json]
+```
+
+### Example Output
+```
+PROJECT: /home/developer/Projects/api (Inode: 2050:1493028)
+TOTAL SECRETS: 3
+
+KEY                 VALUE MASKED         UPDATED
+------------------  -------------------  --------------------
+DATABASE_URL        postgres://••••••••  2026-08-31 03:45:12
+STRIPE_SECRET_KEY   sk_live_•••••••••••  2026-08-31 03:46:01
+REDIS_PASSWORD      •••••••••••••••••••  2026-08-31 03:47:20
+```
+
+---
+
+## mayfly delete
+
+Remove one or all variables from the current project vault.
+
+```bash
+mayfly delete <KEY>
+```
+
+To remove all variables for the current project:
+
+```bash
+mayfly delete --all
+```
+
+---
+
+## mayfly ui
+
+Launch the full-screen terminal user interface (TUI) dashboard.
+
+```bash
+mayfly ui
+```
+
+Provides an interactive keyboard-driven interface with secret editing, masking toggles, audit history viewer, and scan reports—built with zero third-party UI libraries.

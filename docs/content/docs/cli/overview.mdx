@@ -1,0 +1,39 @@
+---
+title: CLI Commands Overview
+description: Index and syntax reference for all MayFly command-line operations.
+---
+
+## Command Syntax
+
+```bash
+mayfly [command] [flags] [arguments...]
+```
+
+MayFly can also be invoked via the `mf` alias if installed.
+
+---
+
+## Command Matrix
+
+| Command | Description | Common Flags |
+| :--- | :--- | :--- |
+| [`mayfly init`](/docs/cli/vault#mayfly-init) | Initialize an encrypted vault for the current directory | `--iterations`, `--force` |
+| [`mayfly run`](/docs/cli/run) | Execute target command with in-memory secrets injection | `--isolated`, `--verbose` |
+| [`mayfly set`](/docs/cli/vault#mayfly-set) | Store or update an environment variable | `--interactive`, `--multiline` |
+| [`mayfly get`](/docs/cli/vault#mayfly-get) | Retrieve the plaintext value of a secret | `--unmask` |
+| [`mayfly list`](/docs/cli/vault#mayfly-list) | List registered keys in the current project vault | `--format=table\|json` |
+| [`mayfly delete`](/docs/cli/vault#mayfly-delete) | Remove an environment variable from the vault | `--all` |
+| [`mayfly scan`](/docs/cli/scan) | Scan workspace for accidentally committed plaintext secrets | `--depth`, `--fix` |
+| [`mayfly audit`](/docs/cli/audit) | Inspect or cryptographically verify the access log | `--verify`, `--limit` |
+| [`mayfly ui`](/docs/cli/vault#mayfly-ui) | Launch the zero-dependency interactive TUI dashboard | `--session` |
+
+---
+
+## Global Flags
+
+The following flags are accepted across commands:
+
+- `--help`, `-h`: Display command help and usage syntax.
+- `--version`, `-v`: Display MayFly version and build metadata.
+- `--vault-path <path>`: Override the default vault file path (`~/.mayfly/vault.enc`).
+- `--non-interactive`: Disable interactive terminal prompts (fails if password is required and not supplied via environment or session).

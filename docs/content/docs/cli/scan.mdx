@@ -1,0 +1,59 @@
+---
+title: "mayfly scan"
+description: Scan source trees and configuration files for exposed plaintext secrets and API keys.
+---
+
+## Synopsis
+
+```bash
+mayfly scan [path] [--depth 5] [--fix]
+```
+
+---
+
+## Description
+
+The `scan` command recursively inspects local source files, commits, and configuration paths to detect plaintext secrets that may have been committed or left on disk.
+
+It uses regex rules and Shannon entropy heuristics to find:
+- AWS Access Keys & Secret Keys
+- Stripe Secret & Publishable Keys
+- GitHub Personal Access Tokens & OAuth Tokens
+- Private RSA / SSH / PGP Keys
+- Generic high-entropy strings and database connection URLs
+
+---
+
+## Detection Rules
+
+| Provider / Type | Format Pattern | Entropy Check |
+| :--- | :--- | :--- |
+| **Stripe API Key** | `sk_live_[0-9a-zA-Z]{24,}` | Exact prefix match |
+| **AWS Access Key** | `AKIA[0-9A-Z]{16}` | Regex validation |
+| **GitHub Token** | `ghp_[0-9a-zA-Z]{36}` | Regex validation |
+| **Private Keys** | `-----BEGIN (RSA\|OPENSSH\|PRIVATE) KEY-----` | Header pattern |
+| **Generic High Entropy** | Base64 / Hex sequences > 32 chars | Shannon Entropy > 4.5 |
+
+---
+
+## Examples
+
+### Scan Current Project
+
+```bash
+mayfly scan
+```
+
+### Scan Specific Subdirectory
+
+```bash
+mayfly scan ./src --depth 3
+```
+
+### Auto-Import Discovered `.env` into Vault and Remove from Disk
+
+```bash
+mayfly scan --fix
+```
+
+When `--fix` is passed, MayFly prompts to import detected key-value pairs directly into the encrypted vault and securely unlinks the plaintext `.env` file.

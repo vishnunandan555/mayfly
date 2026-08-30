@@ -1,0 +1,62 @@
+---
+title: Introduction
+description: Overview of MayFly, the zero-dependency local secrets manager that eliminates plaintext .env files.
+---
+
+## Overview
+
+**MayFly** is a lightweight, zero-dependency local secrets management utility designed to prevent credential exposure in developer workspaces.
+
+In modern software development, project environments frequently rely on `.env` files or local configuration trees containing unencrypted database credentials, private API keys, and access tokens. When package managers (`npm`, `pip`, `cargo`) execute installation hooks or developer scripts, arbitrary code runs with filesystem access to these plaintext files.
+
+MayFly eliminates this attack surface by keeping secrets encrypted at rest in a local vault and injecting them directly into the target process's memory space upon execution.
+
+---
+
+## The Supply-Chain Threat Model
+
+When dependencies are installed or build tasks are executed, untrusted code runs on the host machine. Real-world supply-chain attacks frequently execute the following steps:
+
+1. Traverse the current workspace and parent directories searching for `.env`, `.env.local`, and configuration files.
+2. Read plaintext tokens, cloud provider keys, and database connection strings.
+3. Exfiltrate stolen credentials over outbound network requests prior to the developer running the primary application.
+
+Preventing all third-party package hooks from running during builds is impractical in complex ecosystems. However, ensuring that **no plaintext secrets exist on disk** neutralizes local credential scanning attacks.
+
+---
+
+## Architectural Principles
+
+MayFly is built on four core design principles:
+
+### 1. Zero Disk Residue
+Decrypted credentials never touch physical disk storage. Secrets remain encrypted in binary format (`~/.mayfly/vault.enc`) until process execution, where they are decrypted strictly into volatile RAM and passed directly into the child process environment table.
+
+### 2. Direct Process Execution
+MayFly does not execute commands via shell subshells (`/bin/sh -c` or `cmd.exe /c`). Instead, commands are launched directly via host operating system process primitives (`os/exec`), preventing shell history logging, environment variable leakage across subshells, and command interpolation vulnerabilities.
+
+### 3. Filesystem-Level Project Isolation
+Projects are identified using deterministic Linux filesystem attributes (`st_dev` + `st_ino`) combined with canonical path resolution. Secrets associated with Project A cannot be accessed or resolved by Project B.
+
+### 4. Zero External Dependencies
+MayFly is written entirely in Go using only the standard library (`crypto/aes`, `crypto/cipher`, `crypto/sha256`, `crypto/subtle`, `os/exec`, `syscall`). It has zero runtime third-party dependencies, making it completely resilient to upstream package hijacking.
+
+---
+
+## Workflow Comparison
+
+### Traditional `.env` Workflow
+```
+[Disk: .env (Plaintext)] ---> [npm install / build (Untrusted Code Reads Disk)]
+                                     |
+                                     v
+                          [Credential Exfiltration]
+```
+
+### MayFly Workflow
+```
+[Encrypted Vault: ~/.mayfly/vault.enc]
+               |
+               v (In-Memory Decryption)
+[Target Process Memory Space] (No plaintext file on disk)
+```

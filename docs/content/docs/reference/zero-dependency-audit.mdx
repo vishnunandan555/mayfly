@@ -1,0 +1,61 @@
+---
+title: Zero-Dependency Verification
+description: Technical audit and proof of zero third-party runtime dependencies in MayFly.
+---
+
+## Philosophy
+
+Most modern tools rely on hundreds of transitive dependencies. If any upstream dependency in the chain is compromised, typo-squatted, or modified via malicious maintainer takeovers, downstream users inherit the vulnerability.
+
+MayFly was engineered from day one to operate with **zero third-party Go dependencies** (`go.mod` contains no `require` blocks).
+
+---
+
+## `go.mod` Verification
+
+Inspection of MayFly's [`go.mod`](file:///home/vishnunandan555/Projects/mayfly/go.mod):
+
+```go
+module mayfly
+
+go 1.22
+```
+
+There are zero external module requirements or vendor packages.
+
+---
+
+## Standard Library Mapping
+
+All subsystems are implemented using standard Go runtime packages:
+
+| MayFly Subsystem | Go Standard Library Packages Used |
+| :--- | :--- |
+| **Key Derivation (PBKDF2)** | `crypto/hmac`, `crypto/sha256`, `crypto/subtle` |
+| **Authenticated Encryption** | `crypto/aes`, `crypto/cipher`, `crypto/rand` |
+| **Data Compression** | `compress/gzip`, `bytes` |
+| **Filesystem & Inode Resolution** | `os`, `syscall`, `path/filepath` |
+| **Process Execution & I/O** | `os/exec`, `os/signal`, `syscall`, `io` |
+| **Tamper-Evident Audit Logging** | `crypto/sha256`, `encoding/json`, `time` |
+| **Terminal User Interface (TUI)** | ANSI escape sequences, raw terminal mode via `syscall.SYS_IOCTL` (`TCGETS`/`TCSETS`) |
+
+---
+
+## Reproducible Dependency Audit Command
+
+To audit the compiled binary for external dependencies:
+
+```bash
+go list -m all
+```
+
+Expected output:
+```
+mayfly
+```
+
+To list all standard library packages imported across the codebase:
+
+```bash
+go list -f '{{.ImportPath}}' ./...
+```
