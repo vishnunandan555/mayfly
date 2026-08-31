@@ -7,8 +7,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
+	"sort"
 	"strings"
+	"syscall"
 
 	"mayfly/pkg/domain"
 )
@@ -56,6 +59,18 @@ func (e *ProcessExecutor) Execute(ctx context.Context, req domain.ExecutionReque
 		cmd.Dir = req.Dir
 	}
 
+	// Inform user of in-memory injection status on stderr
+	if len(secrets) > 0 {
+		keys := make([]string, 0, len(secrets))
+		for k := range secrets {
+			keys = append(keys, string(k))
+		}
+		sort.Strings(keys)
+		fmt.Fprintf(e.stderr, "🦋 \x1b[36mMayFly:\x1b[0m Injected \x1b[1m%d secret(s)\x1b[0m into process RAM [%s]\n", len(secrets), strings.Join(keys, ", "))
+	} else {
+		fmt.Fprintf(e.stderr, "🦋 \x1b[33mMayFly:\x1b[0m No secrets configured for this project\n")
+	}
+
 	// Build in-memory environment overlay
 	envMap := make(map[string]string)
 	for _, envVar := range os.Environ() {
@@ -65,7 +80,7 @@ func (e *ProcessExecutor) Execute(ctx context.Context, req domain.ExecutionReque
 		}
 	}
 
-	// Overlay project secrets
+	// Overlay project secrets into RAM table
 	for k, v := range secrets {
 		envMap[string(k)] = v
 	}
@@ -76,13 +91,44 @@ func (e *ProcessExecutor) Execute(ctx context.Context, req domain.ExecutionReque
 	}
 	cmd.Env = envSlice
 
-	err := cmd.Run()
+	// Deferred memory wipe to prevent credentials lingering in process heap
+	defer func() {
+		for i := range envSlice {
+			envSlice[i] = ""
+		}
+		for k := range envMap {
+			delete(envMap, k)
+		}
+		runtime.GC()
+	}()
 
-	// Clear memory references
-	for i := range envSlice {
-		envSlice[i] = ""
+	// Signal forwarding channel to guarantee child process terminates on Ctrl+C / SIGTERM
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
+
+	if err := cmd.Start(); err != nil {
+		return domain.ExecutionResult{ExitCode: 1}, err
 	}
-	runtime.KeepAlive(envSlice)
+
+	// Forward kill/interrupt signals to the child process
+	doneChan := make(chan struct{})
+	go func() {
+		select {
+		case sig, ok := <-sigChan:
+			if ok && cmd.Process != nil {
+				_ = cmd.Process.Signal(sig)
+			}
+		case <-ctx.Done():
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+		case <-doneChan:
+		}
+	}()
+
+	err := cmd.Wait()
+	close(doneChan)
 
 	if err != nil {
 		var exitErr *exec.ExitError

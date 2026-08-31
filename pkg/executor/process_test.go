@@ -34,4 +34,7 @@ func TestProcessExecutorEnvironmentOverlay(t *testing.T) {
 	if !strings.Contains(stdout.String(), "VAL=hello_from_ram") {
 		t.Fatalf("expected injected secret in stdout, got: %s", stdout.String())
 	}
+	if !strings.Contains(stderr.String(), "Injected 1 secret(s) into process RAM [MAYFLY_TEST_SECRET]") {
+		t.Fatalf("expected injection notification in stderr, got: %s", stderr.String())
+	}
 }
