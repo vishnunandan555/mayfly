@@ -6,29 +6,81 @@ icon: Lightbulb
 
 ## The Core Problem
 
-Almost every development workspace has a `.env` or `.env.local` file containing production credentials, database passwords, and third-party API keys in plaintext.
+Almost every modern development workspace relies on `.env` or `.env.local` files containing production credentials, Stripe API keys, database connection strings, and AI service tokens in plaintext.
 
-When developers run commands like `npm install`, `pip install`, or `cargo build`, untrusted package install scripts execute with full user privileges. In real-world software supply-chain attacks, malicious packages scan local disk trees for `.env` files and exfiltrate secrets before the application even starts.
+```ini
+# Plaintext .env sitting on developer SSD
+STRIPE_SECRET_KEY=sk_live_51Msz9876543210
+DATABASE_URL=postgresql://admin:super_secret_password@db.internal:5432/prod
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+OPENAI_API_KEY=sk-proj-9876543210abcdef
+```
+
+### The Supply-Chain Attack Threat Model
+
+When developers run common build or installation commands:
+```bash
+npm install
+pip install -r requirements.txt
+cargo build
+```
+
+Third-party dependencies execute automated build hooks (e.g. `postinstall` in npm, `setup.py` / wheels in Python, `build.rs` in Rust) with **full user privileges**.
+
+1. **Malicious Disk Crawling**: A compromised package scans parent directories (`../..`) searching for `.env`, `.env.local`, or `.git/config`.
+2. **Instant Exfiltration**: The package reads plaintext files and transmits your production secrets to an external command-and-control server before your application even starts.
+3. **Silent Breach**: Your application runs without errors, leaving no visual trace of credential compromise.
+
+---
+
+## The MayFly Defense: In-Memory Isolation
+
+MayFly completely eliminates the attack surface by ensuring that **no unencrypted `.env` files ever exist on disk**.
+
+```text
+┌─────────────────────────┐
+│ ~/.mayfly/vault.enc     │  <--- AES-256-GCM encrypted binary container
+└────────────┬────────────┘
+             │ 1. mf npm run dev
+             ▼
+┌─────────────────────────┐
+│ Volatile Memory (RAM)   │  <--- Decrypted strictly into RAM byte slices
+└────────────┬────────────┘
+             │ 2. os/exec environment table injection
+             ▼
+┌─────────────────────────┐
+│ Node / Next.js Process  │  <--- Receives process.env directly in RAM
+└─────────────────────────┘
+             ▲
+             │
+[Malicious npm postinstall]   <--- Scans filesystem: Finds 0 secrets!
+```
+
+1. **Zero Disk Footprint**: Secrets remain encrypted in `~/.mayfly/vault.enc`.
+2. **Untrusted Installs are Safe**: You can run `npm install` freely because there are no plaintext `.env` files on disk to steal.
+3. **Ephemeral Lifecycle**: Decrypted secrets exist in RAM only for the duration of the child process. When the process terminates, volatile buffers are zeroed out with `runtime.KeepAlive`.
 
 ---
 
 ## Comparison Matrix
 
-| Feature | Plaintext `.env` | Doppler / 1Password CLI | HashiCorp Vault | MayFly |
-| :--- | :--- | :--- | :--- | :--- |
-| **Secrets on Disk** | Plaintext on disk | In-memory or env | In-memory | **0 plaintext on disk** |
-| **Network Requirement** | Offline | Cloud dependency | Network daemon | **100% Local / Offline** |
-| **External Dependencies** | Zero | Many (SDKs/APIs) | Client daemons | **0 Dependencies (Pure Go)** |
-| **Project Isolation** | Directory path | Workspace ID | Path policies | **Hardware Inode Isolation** |
-| **Audit Logging** | None | Cloud dashboard | Server log | **Tamper-Evident SHA-256 Chain** |
-| **Zero-Configuration TUI** | No | Web UI only | Web UI / CLI | **Built-in Pure Go TUI** |
+| Security & Workflow Feature | Plaintext `.env` | `direnv` | `dotenvx` | `1Password / Doppler` | **MayFly (`mf`)** |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **In-Memory Injection (RAM only)** | ❌ Plaintext disk | ❌ Shell export | ❌ Plaintext disk | ⚠️ Partial | ✅ **100% Volatile RAM** |
+| **Zero Disk Footprint (No `.env`)** | ❌ Files on disk | ❌ Files on disk | ❌ Files on disk | ⚠️ Requires daemon | ✅ **0 plaintext on disk** |
+| **Protects from `npm/pip` disk scrapers** | ❌ Vulnerable | ❌ Vulnerable | ❌ Vulnerable | ⚠️ Partial | ✅ **Completely Neutralized** |
+| **Zero Third-Party Dependencies** | ❌ Many packages | ❌ Many packages | ❌ npm bloat | ❌ Heavy SDKs/Daemons | ✅ **100% Pure Go Stdlib** |
+| **100% Offline & Air-Gapped** | ✅ Offline | ✅ Offline | ⚠️ Hybrid | ❌ Cloud account / API | ✅ **Zero network calls** |
+| **Hardware Inode Directory Binding** | ❌ Name only | ⚠️ Path string | ❌ None | ❌ Cloud workspace | ✅ **Physical `(Dev, Inode)`** |
+| **Built-in Interactive Terminal UI** | ❌ None | ❌ None | ❌ None | ❌ Web dashboard | ✅ **Pure Go TUI Engine** |
+| **Cryptographic Audit Log** | ❌ None | ❌ None | ❌ None | ⚠️ Cloud SIEM | ✅ **SHA-256 Hash Chain** |
 
 ---
 
 ## Where MayFly Fits
 
 MayFly is built for:
-- **Local Development**: Run `mf npm run dev` or `mf python main.py` without leaving credentials on your workstation disk.
+- **Local Development**: Run `mf npm run dev`, `mf python main.py`, or `mf cargo run` without leaving credentials on your workstation disk.
 - **CI / Build Machines**: Inject build credentials into compilation steps without writing transient env files.
 - **Developer Workstations**: Prevent accidental commits of `.env` files into Git repositories.
 - **Supply-Chain Hardening**: Mitigate malicious npm/pip lifecycle scripts (`postinstall`) from exfiltrating credentials.
@@ -37,5 +89,6 @@ MayFly is built for:
 
 ## What MayFly Does Not Try to Be
 
-- **A Team Secrets Synchronization Cloud**: MayFly does not sync credentials to third-party cloud servers over the internet. It is strictly a secure local workstation secrets manager.
-- **A Secret Rotation Daemon**: MayFly stores, protects, and injects your secrets locally. Automated remote token rotation should be managed via your cloud identity provider.
+- **A Paid SaaS Cloud Synchronization Service**: MayFly does not sync credentials to third-party cloud servers over the internet. It is strictly a secure local workstation secrets manager. Teams share encrypted backups (`mf backup`) peer-to-peer or via their existing cold storage channels.
+- **A Remote Token Rotation Daemon**: MayFly stores, protects, and injects your secrets locally. Automated remote token rotation should be managed via your cloud identity provider.
+

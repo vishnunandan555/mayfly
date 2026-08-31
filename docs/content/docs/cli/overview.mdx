@@ -36,7 +36,6 @@ mf current
 | `mf delete` | `mf delete KEY` | Removes a secret key from the encrypted vault | Key name |
 | `mf import` | `mf import [.env]` | Bulk-imports `.env` into vault with optional plaintext deletion | `--delete`, `--no-delete` |
 | `mf rotate-password`| `mf rotate-password` | Re-encrypts all project vaults with a new master password | Interactive prompts |
-| `mf run` | `mf run <cmd>` | Explicit alias for direct process execution | `--isolated` |
 | `mf scan` | `mf scan [dir]` | Scans source tree for plaintext secrets and API keys | `--depth`, `--fix` |
 | `mf audit` | `mf audit` | Views chronological access and modification event log | Log history |
 | `mf audit verify` | `mf audit verify` | Cryptographically verifies SHA-256 Merkle hash chain | Integrity check |

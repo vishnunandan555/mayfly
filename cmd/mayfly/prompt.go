@@ -12,10 +12,39 @@ import (
 	"mayfly/pkg/tui/terminal"
 )
 
+// passwordFromStdin, when true, causes getMasterPassword to read the vault
+// password from the first line of stdin instead of prompting interactively.
+// Safer than MAYFLY_VAULT_PASSWORD env var for CI pipelines.
+var passwordFromStdin bool
+
 func getMasterPassword(svc *application.Service, in io.Reader, out, errOut io.Writer) ([]byte, error) {
+	// Priority 1: --password-stdin flag (safer than env var for CI)
+	if passwordFromStdin {
+		p, err := readLine(in)
+		if err != nil {
+			return nil, fmt.Errorf("--password-stdin: failed to read password: %w", err)
+		}
+		if p == "" {
+			return nil, errors.New("--password-stdin: password cannot be empty")
+		}
+		if !svc.VaultExists() {
+			if err := svc.InitializeVault(context.Background(), []byte(p)); err != nil {
+				return nil, err
+			}
+		}
+		return []byte(p), nil
+	}
+
+	// Priority 2: MAYFLY_VAULT_PASSWORD env var (legacy CI support)
 	if envPass := os.Getenv("MAYFLY_VAULT_PASSWORD"); envPass != "" {
+		if !svc.VaultExists() {
+			if err := svc.InitializeVault(context.Background(), []byte(envPass)); err != nil {
+				return nil, err
+			}
+		}
 		return []byte(envPass), nil
 	}
+
 
 	f, isFile := in.(*os.File)
 	isTerm := isFile && terminal.IsTerminal(f)

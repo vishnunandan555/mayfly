@@ -106,6 +106,9 @@ func (v SemVer) Compare(other SemVer) int {
 	return 0
 }
 
+// httpClient is the shared HTTP client used for all update requests.
+var httpClient = &http.Client{Timeout: 60 * time.Second}
+
 // CheckForUpdates queries the GitHub API for the latest release and determines if a newer version exists.
 func CheckForUpdates(ctx context.Context, customEndpoint string) (ReleaseInfo, bool, error) {
 	url := "https://api.github.com/repos/vishnunandan555/mayfly/releases/latest"
@@ -121,11 +124,7 @@ func CheckForUpdates(ctx context.Context, customEndpoint string) (ReleaseInfo, b
 	req.Header.Set("User-Agent", "mayfly-cli/v"+domain.Version)
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
-	client := &http.Client{
-		Timeout: 6 * time.Second,
-	}
-
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return ReleaseInfo{}, false, err
 	}
@@ -188,14 +187,14 @@ func PerformDirectUpdate(ctx context.Context, tag string, baseURL string) error 
 	binaryURL := fmt.Sprintf("%s/%s", baseURL, targetBinary)
 	checksumURL := fmt.Sprintf("%s/checksums.txt", baseURL)
 
-	client := &http.Client{Timeout: 60 * time.Second}
-
 	// 1. Fetch official checksums.txt manifest
 	reqCheck, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create checksum request: %w", err)
 	}
-	respCheck, err := client.Do(reqCheck)
+	reqCheck.Header.Set("User-Agent", "mayfly-cli/v"+domain.Version)
+
+	respCheck, err := httpClient.Do(reqCheck)
 	if err != nil {
 		return fmt.Errorf("failed to fetch checksums.txt: %w", err)
 	}
@@ -220,7 +219,9 @@ func PerformDirectUpdate(ctx context.Context, tag string, baseURL string) error 
 	if err != nil {
 		return fmt.Errorf("failed to create binary download request: %w", err)
 	}
-	respBin, err := client.Do(reqBin)
+	reqBin.Header.Set("User-Agent", "mayfly-cli/v"+domain.Version)
+
+	respBin, err := httpClient.Do(reqBin)
 	if err != nil {
 		return fmt.Errorf("failed to download release binary: %w", err)
 	}
@@ -242,7 +243,10 @@ func PerformDirectUpdate(ctx context.Context, tag string, baseURL string) error 
 	}
 
 	// 4. In-place atomic binary replacement
-	execPath := GetExecutableLocation()
+	execPath, err := GetExecutableLocation()
+	if err != nil {
+		return fmt.Errorf("could not determine current executable path: %w", err)
+	}
 	execDir := filepath.Dir(execPath)
 
 	tmpFile := filepath.Join(execDir, fmt.Sprintf(".mayfly-update-%d.tmp", time.Now().UnixNano()))
@@ -302,14 +306,15 @@ func PerformUpdate(ctx context.Context) error {
 }
 
 // GetExecutableLocation returns the active binary path on the filesystem.
-func GetExecutableLocation() string {
+func GetExecutableLocation() (string, error) {
 	execPath, err := os.Executable()
 	if err != nil {
-		return "mayfly"
+		return "", err
 	}
 	realPath, err := filepath.EvalSymlinks(execPath)
 	if err != nil {
-		return execPath
+		return execPath, nil
 	}
-	return realPath
+	return realPath, nil
 }
+

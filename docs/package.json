@@ -6,8 +6,11 @@
     "dev": "next dev -p 4000",
     "build": "next build",
     "start": "next start",
+    "clean": "rm -rf .next",
+    "dev:clean": "npm run clean && npm run dev",
     "postinstall": "fumadocs-mdx"
   },
+
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "fumadocs-core": "^15.8.5",

@@ -8,23 +8,49 @@ icon: BookOpen
 
 The fundamental promise of MayFly is that **decrypted plaintext secrets never touch physical storage media**.
 
-```text
-[~/.mayfly/vault.enc]  <--- Encrypted at rest (AES-256-GCM)
-          │
-          │ User provides master password
-          ▼
-[MayFly Memory (RAM)]  <--- Transient PBKDF2 derivation & decryption
-          │
-          │ os/exec environment block injection
-          ▼
-[Target Process (RAM)] <--- Receives process.env / os.Environ() directly
-          │
-          │ Child process terminates
-          ▼
-[Memory Page Freed]    <--- Buffers zeroed with runtime.KeepAlive, no disk trace
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant MF as MayFly (mf run)
+    participant Vault as Vault (~/.mayfly/vault.enc)
+    participant RAM as Volatile RAM Buffer
+    participant App as Target App (Node / Python / Go)
+    participant Disk as Local SSD / Filesystem
+
+    Dev->>MF: mf npm run dev
+    MF->>Vault: Read AES-256-GCM ciphertext + 15B AAD
+    MF->>RAM: Derive Key (PBKDF2 600,000 rounds) & Decrypt in Memory
+    MF->>App: Spawn process via os/exec (Env injected directly in RAM)
+    Note over Disk: Zero plaintext .env files written to disk
+    App->>Dev: App executes normally (reads process.env)
+    App-->>MF: Process Exits (SIGINT / Exit Code)
+    MF->>RAM: Zero memory buffers (runtime.KeepAlive)
+    MF->>Vault: Append SHA-256 event hash to audit log
 ```
 
-Even if an attacker runs a disk-scanning script or inspects filesystem caches after execution, no unencrypted credential files exist.
+```text
+┌─────────────────────────┐
+│ ~/.mayfly/vault.enc     │ <--- Encrypted at rest (AES-256-GCM + 600k PBKDF2 iterations)
+└────────────┬────────────┘
+             │ 1. Master password provided via low-level termios echo suppression
+             ▼
+┌─────────────────────────┐
+│ MayFly Process RAM      │ <--- Decrypted strictly into volatile memory byte slices
+└────────────┬────────────┘
+             │ 2. Direct os/exec environment block injection
+             ▼
+┌─────────────────────────┐
+│ Target Child Process    │ <--- Child reads process.env / os.Environ() directly
+└────────────┬────────────┘
+             │ 3. Child exits or receives SIGINT
+             ▼
+┌─────────────────────────┐
+│ Memory Pages Zeroed     │ <--- Buffers overwritten with zero-bytes (runtime.KeepAlive)
+└─────────────────────────┘
+```
+
+Even if an attacker runs a disk-scanning script, inspects filesystem swap caches, or reads Git status after execution, no unencrypted credential files exist.
 
 ---
 
@@ -34,19 +60,20 @@ Traditional tools often bind configurations to folder names (e.g. `my-app`). If 
 
 MayFly eliminates this by resolving the **filesystem device ID (`st_dev`) and inode number (`st_ino`)**:
 
-- Inode numbers are unique hardware identifiers assigned by the filesystem.
-- Symlinks and directory renames preserve the same underlying inode.
-- Secrets for Project A cannot be decrypted or mapped to Project B.
+- **Hardware Identifier**: Inode numbers are unique 64-bit hardware identifiers assigned by the physical filesystem driver.
+- **Symlink & Rename Resilient**: Symlinks and directory renames preserve the same underlying physical inode.
+- **Cross-Contamination Protection**: Secrets registered for Project A cannot be decrypted or mapped to Project B even if directories share the same name.
 
 ---
 
 ## 3. Direct Host Execution (`os/exec`)
 
-Instead of passing shell strings through `/bin/sh -c`, MayFly uses the Go standard library `os/exec.Command` primitive:
+Instead of passing shell strings through `/bin/sh -c`, MayFly uses the Go standard library `os/exec.CommandContext` primitive:
 
-- **Argument Preservation**: Arguments are passed as an exact string array without shell re-tokenization.
-- **History Protection**: Sensitive command arguments never appear in `~/.bash_history` or `~/.zsh_history`.
-- **Signal Forwarding**: Operating system signals like `SIGINT` (Ctrl+C) and `SIGTERM` are passed directly to the child process without intermediate shell trapping.
+- **Argument Preservation**: Arguments are passed as an exact string array without shell re-tokenization or unwanted glob expansion.
+- **History Protection**: Sensitive command arguments never appear in `~/.bash_history`, `~/.zsh_history`, or fish history.
+- **Signal Forwarding**: Operating system signals like `SIGINT` (Ctrl+C), `SIGTERM`, and `SIGHUP` are passed directly to the child process without intermediate shell trapping.
+- **PTY Transparency**: Terminal standard input, standard output, and standard error file descriptors are piped transparently to preserve full ANSI colors and interactive prompts.
 
 ---
 

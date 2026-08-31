@@ -43,13 +43,10 @@ func TestParseSemVerAndCompare(t *testing.T) {
 }
 
 func TestCheckForUpdatesWithMockServer(t *testing.T) {
-	origVersion := domain.Version
-	domain.Version = "0.0.1"
-	defer func() { domain.Version = origVersion }()
-
+	// Mock a release that is strictly newer than the current version.
 	mockRelease := ReleaseInfo{
-		TagName:     "v0.0.2",
-		Name:        "MayFly v0.0.2",
+		TagName:     "v99.0.0",
+		Name:        "MayFly v99.0.0",
 		Body:        "- Security updates\n- Performance improvements",
 		PublishedAt: "2026-08-31T12:00:00Z",
 	}
@@ -66,14 +63,41 @@ func TestCheckForUpdatesWithMockServer(t *testing.T) {
 		t.Fatalf("CheckForUpdates failed: %v", err)
 	}
 
-	if rel.TagName != "v0.0.2" {
-		t.Errorf("expected tag v0.0.2, got %q", rel.TagName)
+	if rel.TagName != "v99.0.0" {
+		t.Errorf("expected tag v99.0.0, got %q", rel.TagName)
 	}
 
 	if !isNewer {
-		t.Errorf("expected v0.0.2 to be newer than current v0.0.1")
+		t.Errorf("expected v99.0.0 to be newer than current %s", domain.Version)
 	}
 }
+
+func TestCheckForUpdatesNotNewerWhenSameVersion(t *testing.T) {
+	// When remote version equals current, isNewer must be false.
+	mockRelease := ReleaseInfo{
+		TagName:     "v" + domain.Version,
+		Name:        "MayFly v" + domain.Version,
+		Body:        "Current release",
+		PublishedAt: "2026-08-31T12:00:00Z",
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(mockRelease)
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+	_, isNewer, err := CheckForUpdates(ctx, server.URL)
+	if err != nil {
+		t.Fatalf("CheckForUpdates failed: %v", err)
+	}
+
+	if isNewer {
+		t.Errorf("expected isNewer=false when remote version equals current version")
+	}
+}
+
 
 func TestParseExpectedHash(t *testing.T) {
 	manifest := `# Official SHA-256 Checksums

@@ -18,8 +18,10 @@ var (
 
 // Registry manages the project definitions stored on disk in ~/.mayfly/projects.json.
 type Registry struct {
-	mu   sync.RWMutex
-	path string
+	mu          sync.RWMutex
+	path        string
+	cache       map[string]domain.Project
+	cacheLoaded bool
 }
 
 func DefaultRegistryPath() (string, error) {
@@ -48,9 +50,21 @@ func (r *Registry) Path() string {
 }
 
 func (r *Registry) loadLocked() (map[string]domain.Project, error) {
+	// Return from in-memory cache if populated.
+	if r.cacheLoaded {
+		// Return a shallow copy so callers can't mutate the cache directly.
+		copy := make(map[string]domain.Project, len(r.cache))
+		for k, v := range r.cache {
+			copy[k] = v
+		}
+		return copy, nil
+	}
+
 	data, err := os.ReadFile(r.path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			r.cache = make(map[string]domain.Project)
+			r.cacheLoaded = true
 			return make(map[string]domain.Project), nil
 		}
 		return nil, err
@@ -63,7 +77,17 @@ func (r *Registry) loadLocked() (map[string]domain.Project, error) {
 	if projects == nil {
 		projects = make(map[string]domain.Project)
 	}
-	return projects, nil
+
+	// Populate cache.
+	r.cache = projects
+	r.cacheLoaded = true
+
+	// Return a copy.
+	copy := make(map[string]domain.Project, len(projects))
+	for k, v := range projects {
+		copy[k] = v
+	}
+	return copy, nil
 }
 
 func (r *Registry) saveLocked(projects map[string]domain.Project) error {
@@ -101,7 +125,27 @@ func (r *Registry) saveLocked(projects map[string]domain.Project) error {
 		return err
 	}
 
-	return os.Rename(tmpName, r.path)
+	if err := os.Rename(tmpName, r.path); err != nil {
+		return err
+	}
+
+	// Update cache to reflect the newly saved state.
+	r.cache = make(map[string]domain.Project, len(projects))
+	for k, v := range projects {
+		r.cache[k] = v
+	}
+	r.cacheLoaded = true
+
+	return nil
+}
+
+// InvalidateCache clears the in-memory registry cache, forcing the next read to reload from disk.
+// Primarily useful in tests.
+func (r *Registry) InvalidateCache() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cacheLoaded = false
+	r.cache = nil
 }
 
 // Register adds a new project directory to the registry.

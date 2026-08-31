@@ -18,6 +18,10 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-orange" alt="License" /></a>
 </p>
 
+<p align="center">
+  <img src="assets/demo.gif" width="760" alt="MayFly Live Demo" />
+</p>
+
 ---
 
 ## The Problem MayFly Solves
@@ -31,7 +35,41 @@ OPENAI_API_KEY=sk-proj-1234567890
 
 **The Threat:** Whenever you run `npm install`, `pip install`, or `cargo build`, third-party supply-chain malware can scan your filesystem, read the `.env` file, and exfiltrate your production credentials before your application even starts.
 
-**MayFly's Solution:** Never write `.env` files to disk. All secrets are stored in a single authenticated binary vault (`~/.mayfly/vault.enc`) encrypted with **AES-256-GCM** and derived via **RFC 8018 PBKDF2** (600,000 iterations). When you launch your application (`mayfly run npm start` or `mf run`), MayFly decrypts secrets directly into **volatile memory (RAM)**, attaches them to the child process environment, and immediately zeroes memory buffers when the process exits.
+**MayFly's Solution:** Never write `.env` files to disk. All secrets are stored in a single authenticated binary vault (`~/.mayfly/vault.enc`) encrypted with **AES-256-GCM** and derived via **RFC 8018 PBKDF2** (600,000 iterations). When you launch your application (`mf npm start` or `mayfly npm start`), MayFly decrypts secrets directly into **volatile memory (RAM)**, attaches them to the child process environment, and immediately zeroes memory buffers when the process exits.
+
+```text
+┌── [LIVE WORKFLOW DEMONSTRATION] ────────────────────────────────────────────────┐
+│ $ mf set STRIPE_SECRET=sk_live_9a8b7c6d5e4f3a2b1c                               │
+│ [saved] Secret STRIPE_SECRET encrypted to vault (AES-256-GCM)                   │
+│                                                                                 │
+│ $ mf npm run dev                                                                │
+│ [mayfly] unlocked vault in memory (600,000 PBKDF2 iterations)                   │
+│ [mayfly] injected 3 secret(s) directly into volatile RAM                        │
+│                                                                                 │
+│ > my-app@0.1.0 dev                                                              │
+│ > next dev                                                                      │
+│   ▲ Next.js 15.5.24 - Local: http://localhost:3000                              │
+│   ✓ Ready in 1.2s (Secrets active in process.env)                               │
+│                                                                                 │
+│ $ cat .env                                                                      │
+│ cat: .env: No such file or directory  ← (Malicious package scanners find 0 keys)│
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## MayFly vs. The Alternatives
+
+| Security & Workflow Feature | Plain `.env` | `direnv` | `dotenvx` | `1Password / Doppler` | **MayFly (`mf`)** |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **In-Memory Injection (RAM only)** | ❌ Plaintext disk | ❌ Shell export | ❌ Plaintext disk | ⚠️ Partial | ✅ **100% Volatile RAM** |
+| **Zero Disk Footprint (No `.env`)** | ❌ Files on disk | ❌ Files on disk | ❌ Files on disk | ⚠️ Requires daemon | ✅ **0 plaintext on disk** |
+| **Protects from `npm/pip` disk scrapers**| ❌ Vulnerable | ❌ Vulnerable | ❌ Vulnerable | ⚠️ Partial | ✅ **Completely Neutralized** |
+| **Zero Third-Party Dependencies** | ❌ Many packages | ❌ Many packages | ❌ npm bloat | ❌ Heavy SDKs/Daemons | ✅ **100% Pure Go Stdlib** |
+| **100% Offline & Air-Gapped** | ✅ Offline | ✅ Offline | ⚠️ Hybrid | ❌ Cloud account / API | ✅ **Zero network calls** |
+| **Hardware Inode Directory Binding** | ❌ Name only | ⚠️ Path string | ❌ None | ❌ Cloud workspace | ✅ **Physical `(Dev, Inode)`** |
+| **Built-in Interactive Terminal UI** | ❌ None | ❌ None | ❌ None | ❌ Web dashboard | ✅ **Pure Go TUI Engine** |
+| **Cryptographic Audit Log** | ❌ None | ❌ None | ❌ None | ⚠️ Cloud SIEM | ✅ **SHA-256 Hash Chain** |
 
 ---
 
@@ -71,6 +109,49 @@ make install
 ```
 
 > `make` targets depend on Unix tooling (`mkdir -p`, `ln -sf`, `sha256sum`, `$(HOME)`) and are not native to plain `cmd.exe` or PowerShell without Git Bash/MSYS2/WSL or a Windows `make` installation.
+
+---
+
+## Framework One-Liner Quickstart
+
+MayFly works out-of-the-box with any programming language, framework, or CLI tool:
+
+| Framework / Stack | Run Command with MayFly | How It Works |
+| :--- | :--- | :--- |
+| **Next.js & React** | `mf npm run dev` | Injects into `process.env` in RAM; zero `.env.local` on disk |
+| **Node.js & Express** | `mf node server.js` | Direct volatile RAM injection; no `dotenv.config()` needed |
+| **Vite & Frontend** | `mf npx vite` | Secrets passed to build dev server without leaking to disk |
+| **Python & FastAPI / Django** | `mf uvicorn main:app --reload` | Read via standard `os.environ.get()` |
+| **Python & Poetry / Pipenv** | `mf poetry run python app.py` | Virtualenv child process inherits memory environment |
+| **Go & Fiber / Gin** | `mf go run main.go` | Read via `os.Getenv()`; RAM zeroed on exit |
+| **Rust & Actix / Axum** | `mf cargo run` | Read via `std::env::var()` |
+| **Docker Compose** | `mf docker compose up` | Forwards host RAM environment into container services |
+| **Prisma ORM** | `mf npx prisma migrate dev` | `DATABASE_URL` injected into DB migration CLI |
+
+---
+
+## Team Collaboration & Secret Sharing
+
+MayFly is designed as an **air-gapped, 100% offline workstation secrets manager**. You don't need a third-party SaaS or paid cloud subscription to share secrets across engineering teams:
+
+### 1. Exporting Encrypted Secrets for a Teammate
+Export your project's encrypted vault entries into a portable file:
+```bash
+# Export all secrets in the current project into an encrypted backup
+mf backup team-project.json
+```
+
+### 2. Sharing Safely
+Transmit `team-project.json` via your team's existing encrypted communication channels (e.g. 1Password Vault, GPG-encrypted email, or secure team storage).
+
+### 3. Importing on a New Machine
+When a teammate clones the repository, they initialize the folder and restore the secrets:
+```bash
+cd my-project
+mf init
+mf restore team-project.json
+```
+Once restored, the teammate simply runs `mf npm run dev` with 100% memory isolation.
 
 ---
 

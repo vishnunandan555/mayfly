@@ -73,6 +73,82 @@ func TestMayflyIgnoreSupport(t *testing.T) {
 	}
 }
 
+func TestScannerPatternDetection(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	testCases := map[string]string{
+		"slack_bot.txt":  "xo" + "xb-" + "123456789012-" + "123456789012-" + "abcdefghijklmnopqrstuvwx",
+		"slack_user.txt": "xo" + "xp-" + "123456789012-" + "123456789012-" + "123456789012-" + "abcdef0123456789abcdef0123456789",
+		"openai.txt":     "sk-" + "proj-" + "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234",
+		"anthropic.txt":  "sk-" + "ant-" + "api03-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdefghijklmnopqr",
+		"twilio.txt":     "A" + "C" + "0123456789abcdef0123456789abcdef",
+		"sendgrid.txt":   "S" + "G." + "1234567890123456789012.1234567890123456789012345678901234567890123",
+		"mailgun.txt":    "k" + "ey-" + "0123456789abcdef0123456789abcdef",
+		"db.txt":         "postgres://admin:secretpassword123@db.prod.internal.aws.com:5432/mydb",
+		"jwt.txt":        "ey" + "JhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." + "ey" + "JzdWIiOiIxMjM0NTY3ODkwIn0.doNotLeakThisSignature123456789",
+		"pip.conf":       "index-url = https://user:pass123@pypi.org/simple",
+		"server.key":     "sample key file content",
+	}
+
+
+	for filename, content := range testCases {
+		filePath := filepath.Join(tmpDir, filename)
+		if err := os.WriteFile(filePath, []byte(content+"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s, err := New(Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	findings, err := s.Scan(ctx, tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(findings) < len(testCases) {
+		t.Errorf("expected at least %d findings, got %d", len(testCases), len(findings))
+	}
+}
+
+func TestScannerTemplateExemption(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	templateFiles := []string{
+		".env.example",
+		".env.sample",
+		".env.template",
+		"config.env.dist",
+	}
+
+	for _, name := range templateFiles {
+		filePath := filepath.Join(tmpDir, name)
+		if err := os.WriteFile(filePath, []byte("API_KEY=your_key_here\nDB_PASS=changeme\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s, err := New(Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	findings, err := s.Scan(ctx, tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, f := range findings {
+		if f.Category == "plaintext-env-file" {
+			t.Errorf("expected template file %s to be exempt from plaintext-env-file finding", f.Path)
+		}
+	}
+}
+
 func TestEnvExampleIgnoredWhenSafe(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
@@ -178,4 +254,5 @@ func TestActiveEnvFileFlaggedAsCritical(t *testing.T) {
 		}
 	}
 }
+
 

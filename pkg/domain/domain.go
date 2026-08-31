@@ -47,10 +47,10 @@ func (n SecretName) String() string {
 
 // Secret represents a secret associated with a project.
 type Secret struct {
-	Name      SecretName `json:"name"`
-	Value     string     `json:"value,omitempty"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	Name  SecretName `json:"name"`
+	Value string     `json:"value,omitempty"`
 }
+
 
 // Project represents a registered project folder.
 type Project struct {

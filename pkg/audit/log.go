@@ -227,8 +227,10 @@ func (l *Log) Events(ctx context.Context) ([]domain.AuditEvent, error) {
 
 		var event domain.AuditEvent
 		if err := json.Unmarshal(line, &event); err != nil {
+			fmt.Fprintf(os.Stderr, "[mayfly] audit: warning: skipping corrupt log line (failed to parse JSON): %v\n", err)
 			continue
 		}
+
 		events = append(events, event)
 	}
 

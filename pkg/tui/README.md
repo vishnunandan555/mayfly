@@ -1,8 +1,9 @@
 # 🖥️ MayFly Terminal UI Engine (`pkg/tui`)
 
-[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](file:///home/vishnunandan555/Projects/mayfly/STDLIB.md)
-[![Package Killer](https://img.shields.io/badge/Replaces-bubbletea%20%7C%20tview%20%7C%20termenv-red)](file:///home/vishnunandan555/Projects/mayfly/HACKATHON_WINNING_STRATEGY.md)
-[![Architecture](https://img.shields.io/badge/Engine-Double--Buffered%202D%20Canvas-blue)](file:///home/vishnunandan555/Projects/mayfly/pkg/tui/terminal/terminal.go)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](../../STDLIB.md)
+[![Package Killer](https://img.shields.io/badge/Replaces-bubbletea%20%7C%20tview%20%7C%20termenv-red)](../../STDLIB.md#2-terminal-ui-framework--widgets)
+[![Architecture](https://img.shields.io/badge/Engine-Double--Buffered%202D%20Canvas-blue)](terminal/terminal.go)
+
 
 `pkg/tui` is a **complete, double-buffered, zero-dependency Terminal User Interface framework** built from first principles with raw POSIX `termios` system calls and standard Go primitives.
 

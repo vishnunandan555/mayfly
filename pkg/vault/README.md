@@ -1,8 +1,9 @@
 # 🔐 MayFly Vault Package (`pkg/vault`)
 
-[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](file:///home/vishnunandan555/Projects/mayfly/STDLIB.md)
-[![Go Version](https://img.shields.io/badge/Go-1.22+-blue)](file:///home/vishnunandan555/Projects/mayfly/go.mod)
-[![Security Standard](https://img.shields.io/badge/Crypto-AES--256--GCM%20%2B%20PBKDF2-orange)](file:///home/vishnunandan555/Projects/mayfly/pkg/vault/vault.go)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](../../STDLIB.md)
+[![Go Version](https://img.shields.io/badge/Go-1.22+-blue)](../../go.mod)
+[![Security Standard](https://img.shields.io/badge/Crypto-AES--256--GCM%20%2B%20PBKDF2-orange)](vault.go)
+
 
 `pkg/vault` is a **zero-dependency, production-grade cryptographic secrets storage engine** built entirely with the Go standard library. It replaces heavy third-party cryptography and database dependencies with a clean, authenticated, tamper-resistant binary storage container.
 

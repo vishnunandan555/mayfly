@@ -1,8 +1,9 @@
 # ⚡ MayFly Process Executor (`pkg/executor`)
 
-[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](file:///home/vishnunandan555/Projects/mayfly/STDLIB.md)
-[![Package Killer](https://img.shields.io/badge/Replaces-godotenv%20%7C%20dotenv-red)](file:///home/vishnunandan555/Projects/mayfly/HACKATHON_WINNING_STRATEGY.md)
-[![Memory Security](https://img.shields.io/badge/RAM%20Boundary-Zero--Disk%20I%2FO-blue)](file:///home/vishnunandan555/Projects/mayfly/pkg/executor/process.go)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](../../STDLIB.md)
+[![Package Killer](https://img.shields.io/badge/Replaces-godotenv%20%7C%20dotenv-red)](../../STDLIB.md#6-in-memory-environment-injection)
+[![Memory Security](https://img.shields.io/badge/RAM%20Boundary-Zero--Disk%20I%2FO-blue)](process.go)
+
 
 `pkg/executor` is a **zero-dependency, zero-disk in-memory process environment injection engine**. It allows applications to receive runtime secrets without ever writing a plaintext `.env` file to disk.
 
