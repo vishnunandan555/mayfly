@@ -74,3 +74,32 @@ func TestCheckForUpdatesWithMockServer(t *testing.T) {
 		t.Errorf("expected v0.0.2 to be newer than current v0.0.1")
 	}
 }
+
+func TestParseExpectedHash(t *testing.T) {
+	manifest := `# Official SHA-256 Checksums
+a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0  mayfly-linux-amd64
+b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef01  mayfly-darwin-arm64
+c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef012  mayfly-windows-amd64.exe
+`
+	hash := ParseExpectedHash(manifest, "mayfly-linux-amd64")
+	if hash != "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0" {
+		t.Fatalf("unexpected hash: %q", hash)
+	}
+
+	hashWin := ParseExpectedHash(manifest, "mayfly-windows-amd64.exe")
+	if hashWin != "c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef012" {
+		t.Fatalf("unexpected win hash: %q", hashWin)
+	}
+
+	hashMissing := ParseExpectedHash(manifest, "nonexistent-bin")
+	if hashMissing != "" {
+		t.Fatalf("expected empty for missing bin, got: %q", hashMissing)
+	}
+}
+
+func TestTargetBinaryName(t *testing.T) {
+	name := TargetBinaryName()
+	if name == "" {
+		t.Fatal("expected non-empty target binary name")
+	}
+}

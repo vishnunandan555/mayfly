@@ -1,13 +1,14 @@
 package updater
 
 import (
+	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -158,20 +159,146 @@ func CheckForUpdates(ctx context.Context, customEndpoint string) (ReleaseInfo, b
 	return rel, isNewer, nil
 }
 
-// PerformUpdate downloads and executes the latest installation script or replaces the binary.
-func PerformUpdate(ctx context.Context) error {
+// TargetBinaryName returns the asset filename for the current OS and architecture.
+func TargetBinaryName() string {
+	arch := runtime.GOARCH
+	ext := ""
 	if runtime.GOOS == "windows" {
-		cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "irm https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.ps1 | iex")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		ext = ".exe"
+	}
+	return fmt.Sprintf("mayfly-%s-%s%s", runtime.GOOS, arch, ext)
+}
+
+// PerformDirectUpdate downloads the release binary directly via Go's built-in net/http client,
+// cryptographically verifies the SHA-256 hash against checksums.txt, and replaces the current
+// executable in-place with zero external shell dependencies.
+func PerformDirectUpdate(ctx context.Context, tag string, baseURL string) error {
+	if tag == "" {
+		tag = "latest"
+	}
+	if baseURL == "" {
+		if tag == "latest" {
+			baseURL = "https://github.com/vishnunandan555/mayfly/releases/latest/download"
+		} else {
+			baseURL = "https://github.com/vishnunandan555/mayfly/releases/download/" + tag
+		}
 	}
 
-	// Unix / macOS: Run the official installer updater script
-	cmd := exec.CommandContext(ctx, "bash", "-c", "curl -fsSL https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.sh | bash -s -- --update")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	targetBinary := TargetBinaryName()
+	binaryURL := fmt.Sprintf("%s/%s", baseURL, targetBinary)
+	checksumURL := fmt.Sprintf("%s/checksums.txt", baseURL)
+
+	client := &http.Client{Timeout: 60 * time.Second}
+
+	// 1. Fetch official checksums.txt manifest
+	reqCheck, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create checksum request: %w", err)
+	}
+	respCheck, err := client.Do(reqCheck)
+	if err != nil {
+		return fmt.Errorf("failed to fetch checksums.txt: %w", err)
+	}
+	defer respCheck.Body.Close()
+
+	if respCheck.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download checksums manifest (HTTP %d)", respCheck.StatusCode)
+	}
+
+	checksumBytes, err := io.ReadAll(respCheck.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read checksums manifest: %w", err)
+	}
+
+	expectedHash := ParseExpectedHash(string(checksumBytes), targetBinary)
+	if expectedHash == "" {
+		return fmt.Errorf("no matching SHA-256 entry found for %s in checksums.txt", targetBinary)
+	}
+
+	// 2. Download binary bytes
+	reqBin, err := http.NewRequestWithContext(ctx, http.MethodGet, binaryURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create binary download request: %w", err)
+	}
+	respBin, err := client.Do(reqBin)
+	if err != nil {
+		return fmt.Errorf("failed to download release binary: %w", err)
+	}
+	defer respBin.Body.Close()
+
+	if respBin.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download %s (HTTP %d)", targetBinary, respBin.StatusCode)
+	}
+
+	binData, err := io.ReadAll(respBin.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read downloaded binary data: %w", err)
+	}
+
+	// 3. Cryptographic SHA-256 bit-for-bit verification
+	computedHash := fmt.Sprintf("%x", sha256.Sum256(binData))
+	if !strings.EqualFold(computedHash, expectedHash) {
+		return fmt.Errorf("security alert: SHA-256 checksum mismatch (expected %s, got %s)", expectedHash, computedHash)
+	}
+
+	// 4. In-place atomic binary replacement
+	execPath := GetExecutableLocation()
+	execDir := filepath.Dir(execPath)
+
+	tmpFile := filepath.Join(execDir, fmt.Sprintf(".mayfly-update-%d.tmp", time.Now().UnixNano()))
+	if err := os.WriteFile(tmpFile, binData, 0755); err != nil {
+		tmpFile = filepath.Join(os.TempDir(), fmt.Sprintf(".mayfly-update-%d.tmp", time.Now().UnixNano()))
+		if wErr := os.WriteFile(tmpFile, binData, 0755); wErr != nil {
+			return fmt.Errorf("failed to write temporary updated binary: %w", err)
+		}
+	}
+	defer os.Remove(tmpFile)
+
+	if runtime.GOOS == "windows" {
+		oldExec := execPath + ".old"
+		_ = os.Remove(oldExec)
+		_ = os.Rename(execPath, oldExec)
+	}
+
+	if err := os.Rename(tmpFile, execPath); err != nil {
+		if err := copyExecutable(tmpFile, execPath); err != nil {
+			return fmt.Errorf("failed to replace binary at %s: %w", execPath, err)
+		}
+	}
+
+	return nil
+}
+
+// ParseExpectedHash extracts the SHA-256 hash for a specific binary from a checksums.txt manifest.
+func ParseExpectedHash(checksumContent, targetBinary string) string {
+	scanner := bufio.NewScanner(strings.NewReader(checksumContent))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			filename := filepath.Base(parts[1])
+			if filename == targetBinary {
+				return parts[0]
+			}
+		}
+	}
+	return ""
+}
+
+func copyExecutable(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0755)
+}
+
+// PerformUpdate downloads and applies the latest verified release using pure standard library networking.
+func PerformUpdate(ctx context.Context) error {
+	return PerformDirectUpdate(ctx, "latest", "")
 }
 
 // GetExecutableLocation returns the active binary path on the filesystem.
