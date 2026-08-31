@@ -193,7 +193,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 1
 		}
 
-		fmt.Fprintf(stdout, "✓ Secret %s saved for project %s\n", secName, proj.ID)
+		fmt.Fprintf(stdout, "[OK] Secret %s saved for project %s\n", secName, proj.ID)
 		return 0
 
 	case "get":
@@ -249,7 +249,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 		if clip {
 			_ = terminal.CopyToClipboard(val, stdout)
-			fmt.Fprintf(stdout, "✓ Secret %s copied to clipboard.\n", secName)
+			fmt.Fprintf(stdout, "[OK] Secret %s copied to clipboard.\n", secName)
 			return 0
 		}
 
@@ -474,7 +474,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 1
 		}
 
-		fmt.Fprintf(stdout, "✓ Imported %d secrets from %s into project %s\n", count, targetFile, proj.ID)
+		fmt.Fprintf(stdout, "[OK] Imported %d secrets from %s into project %s\n", count, targetFile, proj.ID)
 		return 0
 
 	case "rotate-password":
@@ -546,7 +546,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 1
 		}
 
-		fmt.Fprintln(stdout, "✓ Vault master password rotated successfully. All secrets re-encrypted with fresh salt.")
+		fmt.Fprintln(stdout, "[OK] Vault master password rotated successfully. All secrets re-encrypted with fresh salt.")
 		return 0
 
 	case "completion":
@@ -595,8 +595,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 
 		_ = os.RemoveAll(filepath.Join(home, ".mayfly"))
-		fmt.Fprintln(stdout, "✓ Removed mayfly and mf binaries.")
-		fmt.Fprintln(stdout, "✓ Removed ~/.mayfly directory and all encrypted vaults.")
+		fmt.Fprintln(stdout, "[OK] Removed mayfly and mf binaries.")
+		fmt.Fprintln(stdout, "[OK] Removed ~/.mayfly directory and all encrypted vaults.")
 		fmt.Fprintln(stdout, "MayFly has been completely and cleanly uninstalled from your system.")
 		return 0
 

@@ -42,7 +42,7 @@ if [ "$UNINSTALL" = true ]; then
     fi
 
     echo "================================================="
-    echo "  🦋 MayFly Complete Uninstaller"
+    echo "  MayFly Complete Uninstaller"
     echo "================================================="
     echo "WARNING: This will completely remove the 'mayfly' and 'mf'"
     echo "binaries, clean your shell PATH, and PERMANENTLY DELETE"
@@ -93,7 +93,7 @@ case "$ARCH" in
         NORM_ARCH="arm64"
         ;;
     *)
-        echo "❌ Error: Unsupported CPU architecture: ${ARCH}"
+        echo "Error: Unsupported CPU architecture: ${ARCH}"
         exit 1
         ;;
 esac
@@ -108,16 +108,16 @@ case "$OS" in
         OS_DISPLAY="macOS (Darwin)"
         ;;
     *)
-        echo "❌ Error: Unsupported operating system: ${OS}"
+        echo "Error: Unsupported operating system: ${OS}"
         exit 1
         ;;
 esac
 
 echo "================================================="
 if [ "$UPDATE" = true ]; then
-    echo "  🦋 MayFly — Updating to ${VERSION}"
+    echo "  MayFly — Updating to ${VERSION}"
 else
-    echo "  🦋 MayFly — Zero-Dependency Secrets Workspace"
+    echo "  MayFly — Zero-Dependency Secrets Workspace"
     echo "  Secure Installation & Supply-Chain Verifier"
 fi
 echo "================================================="
@@ -165,7 +165,7 @@ echo "Fetching ${TARGET_BIN} from ${BASE_URL}..."
 
 if ! curl -fsSL "${BASE_URL}/${TARGET_BIN}" -o "${TMP_DIR}/${TARGET_BIN}" 2>/dev/null; then
     echo ""
-    echo "❌ Error: Failed to download release binary '${TARGET_BIN}' from GitHub Releases (${BASE_URL})."
+    echo "Error: Failed to download release binary '${TARGET_BIN}' from GitHub Releases (${BASE_URL})."
     echo "Please check your network connection or verify that release ${VERSION} is published at:"
     echo "https://github.com/${GITHUB_REPO}/releases"
     exit 1
@@ -173,12 +173,12 @@ fi
 
 if ! curl -fsSL "${BASE_URL}/checksums.txt" -o "${TMP_DIR}/checksums.txt" 2>/dev/null; then
     echo ""
-    echo "❌ Error: Failed to download official 'checksums.txt' manifest from GitHub Releases."
+    echo "Error: Failed to download official 'checksums.txt' manifest from GitHub Releases."
     echo "Installation aborted to prevent running unverified binaries."
     exit 1
 fi
 
-echo "✓ Downloaded binary and published checksums.txt"
+echo "[OK] Downloaded binary and published checksums.txt"
 echo ""
 echo "─── [2/3] Cryptographic SHA-256 Verification ────────────"
 cd "${TMP_DIR}"
@@ -191,7 +191,7 @@ if command -v sha256sum >/dev/null 2>&1; then
 elif command -v shasum >/dev/null 2>&1; then
     COMPUTED_HASH="$(shasum -a 256 "${TARGET_BIN}" | awk '{print $1}')"
 else
-    echo "❌ Error: Neither 'sha256sum' nor 'shasum' is available on this system."
+    echo "Error: Neither 'sha256sum' nor 'shasum' is available on this system."
     echo "Cannot cryptographically verify binary integrity. Installation aborted."
     exit 1
 fi
@@ -200,12 +200,12 @@ echo "Published Hash : ${EXPECTED_HASH}"
 echo "Computed Hash  : ${COMPUTED_HASH}"
 
 if [ -n "$EXPECTED_HASH" ] && [ "$EXPECTED_HASH" = "$COMPUTED_HASH" ]; then
-    echo "Verification   : ✅ 100% BIT-FOR-BIT MATCH (Authentic & Untampered)"
+    echo "Verification   : [OK] 100% BIT-FOR-BIT MATCH (Authentic & Untampered)"
     mv "${TMP_DIR}/${TARGET_BIN}" "${INSTALL_DIR}/mayfly"
 else
-    echo "Verification   : ❌ MISMATCH"
+    echo "Verification   : [FAILED] MISMATCH"
     echo ""
-    echo "🚨 SECURITY ALERT: Cryptographic checksum verification failed!"
+    echo "[SECURITY ALERT]: Cryptographic checksum verification failed!"
     echo "The downloaded binary does NOT match the published release hash."
     echo "Installation aborted to protect your system from potential tampering."
     exit 1
@@ -270,7 +270,7 @@ case ":$PATH:" in
                     echo "# Added by MayFly installer" >> "$RC_FILE"
                     echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$RC_FILE"
                     PATH_UPDATED=true
-                    echo "✓ Added PATH export to $(basename "$RC_FILE")"
+                    echo "[OK] Added PATH export to $(basename "$RC_FILE")"
                 fi
             fi
         fi
@@ -279,7 +279,7 @@ esac
 
 echo ""
 echo "================================================="
-echo "  🎉 MayFly Installation Complete!"
+echo "  MayFly Installation Complete"
 echo "================================================="
 echo ""
 echo "Getting Started:"

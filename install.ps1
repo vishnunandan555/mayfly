@@ -57,9 +57,9 @@ $arch = if ([System.Environment]::Is64BitOperatingSystem) { "amd64" } else { "ar
 
 Write-Host "=================================================" -ForegroundColor Cyan
 if ($Update) {
-    Write-Host "  🦋 MayFly — Updating to $Version" -ForegroundColor Cyan
+    Write-Host "  MayFly — Updating to $Version" -ForegroundColor Cyan
 } else {
-    Write-Host "  🦋 MayFly — Zero-Dependency Secrets Workspace" -ForegroundColor Cyan
+    Write-Host "  MayFly — Zero-Dependency Secrets Workspace" -ForegroundColor Cyan
     Write-Host "  Secure Installation & Supply-Chain Verifier" -ForegroundColor Cyan
 }
 Write-Host "=================================================" -ForegroundColor Cyan
@@ -101,7 +101,7 @@ try {
         Invoke-WebRequest -Uri "$baseUrl/$targetBin" -OutFile $binPath -UseBasicParsing
         Invoke-WebRequest -Uri "$baseUrl/checksums.txt" -OutFile $checksumPath -UseBasicParsing
     } catch {
-        Write-Host "`n❌ Error: Failed to download release binary or checksums from GitHub Releases ($baseUrl)." -ForegroundColor Red
+        Write-Host "`nError: Failed to download release binary or checksums from GitHub Releases ($baseUrl)." -ForegroundColor Red
         Write-Host "Please verify that release '$Version' exists at https://github.com/$Repo/releases" -ForegroundColor Red
         exit 1
     }
@@ -111,13 +111,13 @@ try {
     $expectedLine = Get-Content $checksumPath | Where-Object { $_ -match $targetBin }
 
     if (-not $expectedLine -or -not ($expectedLine.ToLower().StartsWith($computedHash))) {
-        Write-Host "`n🚨 SECURITY ALERT: Cryptographic checksum verification failed!" -ForegroundColor Red
+        Write-Host "`n[SECURITY ALERT]: Cryptographic checksum verification failed!" -ForegroundColor Red
         Write-Host "The downloaded binary does not match the published release hash." -ForegroundColor Red
         Write-Host "Installation aborted to protect your system." -ForegroundColor Red
         exit 1
     }
 
-    Write-Host "✓ Cryptographic SHA-256 Checksum Verified: Authentic & Untampered." -ForegroundColor Green
+    Write-Host "[OK] Cryptographic SHA-256 Checksum Verified: Authentic & Untampered." -ForegroundColor Green
     Copy-Item -Force $binPath "$InstallDir\mayfly.exe"
 } finally {
     Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
@@ -126,16 +126,16 @@ try {
 switch ($aliasChoice) {
     "2" {
         Remove-Item "$InstallDir\mf.exe" -ErrorAction SilentlyContinue
-        Write-Host "✓ Installed mayfly.exe -> $InstallDir\mayfly.exe" -ForegroundColor Green
+        Write-Host "[OK] Installed mayfly.exe -> $InstallDir\mayfly.exe" -ForegroundColor Green
     }
     "3" {
         Move-Item -Force "$InstallDir\mayfly.exe" "$InstallDir\mf.exe"
-        Write-Host "✓ Installed mf.exe -> $InstallDir\mf.exe" -ForegroundColor Green
+        Write-Host "[OK] Installed mf.exe -> $InstallDir\mf.exe" -ForegroundColor Green
     }
     Default {
         Copy-Item -Force "$InstallDir\mayfly.exe" "$InstallDir\mf.exe"
-        Write-Host "✓ Installed mayfly.exe -> $InstallDir\mayfly.exe" -ForegroundColor Green
-        Write-Host "✓ Installed mf.exe     -> $InstallDir\mf.exe" -ForegroundColor Green
+        Write-Host "[OK] Installed mayfly.exe -> $InstallDir\mayfly.exe" -ForegroundColor Green
+        Write-Host "[OK] Installed mf.exe     -> $InstallDir\mf.exe" -ForegroundColor Green
     }
 }
 
@@ -146,12 +146,12 @@ if ($userPath -notlike "*$InstallDir*") {
     $addPath = Read-Host "Add '$InstallDir' to User PATH? [Y/n]"
     if ([string]::IsNullOrWhiteSpace($addPath) -or $addPath -eq "y" -or $addPath -eq "Y") {
         [Environment]::SetEnvironmentVariable("Path", "$userPath;$InstallDir", "User")
-        Write-Host "✓ Added $InstallDir to User PATH." -ForegroundColor Green
+        Write-Host "[OK] Added $InstallDir to User PATH." -ForegroundColor Green
     }
 }
 
 Write-Host "`n=================================================" -ForegroundColor Cyan
-Write-Host "  🎉 MayFly Installation Complete!" -ForegroundColor Cyan
+Write-Host "  MayFly Installation Complete" -ForegroundColor Cyan
 Write-Host "=================================================" -ForegroundColor Cyan
 Write-Host "`nGetting Started:"
 Write-Host "  mayfly (or mf)            - Launch Global TUI Dashboard"

@@ -15,11 +15,11 @@ install:
 	@mkdir -p $(HOME)/.local/bin
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -buildid=" -o $(HOME)/.local/bin/mayfly ./cmd/mayfly
 	@ln -sf mayfly $(HOME)/.local/bin/mf 2>/dev/null || cp $(HOME)/.local/bin/mayfly $(HOME)/.local/bin/mf
-	@echo "✓ Compiled and installed to $(HOME)/.local/bin/mayfly and $(HOME)/.local/bin/mf"
+	@echo "[OK] Compiled and installed to $(HOME)/.local/bin/mayfly and $(HOME)/.local/bin/mf"
 
 uninstall:
 	@rm -f $(HOME)/.local/bin/mayfly $(HOME)/.local/bin/mf
-	@echo "✓ Removed $(HOME)/.local/bin/mayfly and $(HOME)/.local/bin/mf"
+	@echo "[OK] Removed $(HOME)/.local/bin/mayfly and $(HOME)/.local/bin/mf"
 
 test:
 	go test -v ./...
@@ -36,7 +36,7 @@ reproducible:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -buildid=" -o bin/repro1/mayfly ./cmd/mayfly
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -buildid=" -o bin/repro2/mayfly ./cmd/mayfly
 	@sha256sum bin/repro1/mayfly bin/repro2/mayfly
-	@cmp bin/repro1/mayfly bin/repro2/mayfly && echo "✅ REPRODUCIBLE BUILD VERIFIED: Byte-identical outputs!"
+	@cmp bin/repro1/mayfly bin/repro2/mayfly && echo "[OK] REPRODUCIBLE BUILD VERIFIED: Byte-identical outputs!"
 	@rm -rf bin/repro1 bin/repro2
 
 deps-proof:
@@ -65,7 +65,7 @@ release-artifacts:
 	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags="-s -w -buildid=" -o dist/mayfly-windows-arm64.exe ./cmd/mayfly
 	@cd dist && sha256sum mayfly-* > checksums.txt
 	@cd dist && sha256sum --check checksums.txt
-	@echo "✅ Generated and verified all release artifacts in dist/ with checksums.txt"
+	@echo "[OK] Generated and verified all release artifacts in dist/ with checksums.txt"
 
 clean:
 	rm -rf bin/ dist/

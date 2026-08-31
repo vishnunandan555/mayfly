@@ -66,9 +66,9 @@ func (e *ProcessExecutor) Execute(ctx context.Context, req domain.ExecutionReque
 			keys = append(keys, string(k))
 		}
 		sort.Strings(keys)
-		fmt.Fprintf(e.stderr, "🦋 \x1b[36mMayFly:\x1b[0m Injected \x1b[1m%d secret(s)\x1b[0m into process RAM [%s]\n", len(secrets), strings.Join(keys, ", "))
+		fmt.Fprintf(e.stderr, "[mayfly] Injected %d secret(s) into process RAM [%s]\n", len(secrets), strings.Join(keys, ", "))
 	} else {
-		fmt.Fprintf(e.stderr, "🦋 \x1b[33mMayFly:\x1b[0m No secrets configured for this project\n")
+		fmt.Fprintf(e.stderr, "[mayfly] No secrets configured for this project\n")
 	}
 
 	// Build in-memory environment overlay

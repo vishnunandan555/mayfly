@@ -187,7 +187,7 @@ func (g *ProjectCardGrid) Draw(f *terminal.Frame, bounds terminal.Rect) {
 		f.DrawText(cardRect.Min.Row+2, cardRect.Min.Column+2, terminal.Style{Foreground: terminal.ColorBrightBlack}, "ID:   "+idStr)
 
 		if card.IsCurrent {
-			f.DrawText(cardRect.Min.Row+3, cardRect.Min.Column+2, terminal.Style{Foreground: terminal.ColorBrightGreen, Attributes: terminal.AttrBold}, "● Current Working Directory")
+			f.DrawText(cardRect.Min.Row+3, cardRect.Min.Column+2, terminal.Style{Foreground: terminal.ColorBrightGreen, Attributes: terminal.AttrBold}, "[Current Working Directory]")
 		} else {
 			f.DrawText(cardRect.Min.Row+3, cardRect.Min.Column+2, terminal.Style{Foreground: terminal.ColorBrightBlack}, "Press [Enter] to open secrets")
 		}

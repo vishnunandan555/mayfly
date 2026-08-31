@@ -117,11 +117,11 @@ func (s *Screens) Tick() {
 		if elapsed >= 10*time.Second {
 			s.revealValue = false
 			s.revealTimer = time.Time{}
-			s.SetStatus("🔒 Secrets auto-masked after 10s timeout")
+			s.SetStatus("[MASKED] Secrets auto-masked after 10s timeout")
 			s.reloadSecrets()
 		} else {
 			remaining := 10 - int(elapsed.Seconds())
-			s.status = fmt.Sprintf("👁️ Secret revealed (%ds remaining before auto-hide)", remaining)
+			s.status = fmt.Sprintf("[REVEALED] Secret visible (%ds remaining before auto-mask)", remaining)
 		}
 	} else if !s.statusTimer.IsZero() && time.Since(s.statusTimer) > 4*time.Second && !s.revealValue {
 		s.status = ""
@@ -355,17 +355,17 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 				if sel != nil {
 					sec := sel.Data.(domain.Secret)
 					_ = terminal.CopyToClipboard(sec.Value, nil)
-					s.SetStatus(fmt.Sprintf("✓ Copied '%s' to clipboard!", sec.Name))
+					s.SetStatus(fmt.Sprintf("[OK] Copied '%s' to clipboard", sec.Name))
 				}
 				return false
 			case 'v', 'V': // Toggle reveal with 10s auto-hide countdown
 				s.revealValue = !s.revealValue
 				if s.revealValue {
 					s.revealTimer = time.Now()
-					s.status = "👁️ Secret revealed (10s remaining before auto-hide)"
+					s.status = "[REVEALED] Secret visible (10s remaining before auto-mask)"
 				} else {
 					s.revealTimer = time.Time{}
-					s.SetStatus("🔒 Secrets masked")
+					s.SetStatus("[MASKED] Secrets masked")
 				}
 				s.reloadSecrets()
 				return false
@@ -427,7 +427,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 
 			s.mode = ModeProjectSecrets
 			s.reloadSecrets()
-			s.SetStatus(fmt.Sprintf("✓ Saved secret '%s'", nameStr))
+			s.SetStatus(fmt.Sprintf("[OK] Saved secret '%s'", nameStr))
 			return false
 		}
 		if s.secretName.Focused {
@@ -448,7 +448,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 				if sel != nil {
 					sec := sel.Data.(domain.Secret)
 					_ = s.svc.DeleteSecret(ctx, s.selProject.ID, sec.Name)
-					s.SetStatus(fmt.Sprintf("✓ Deleted secret '%s'", sec.Name))
+					s.SetStatus(fmt.Sprintf("[OK] Deleted secret '%s'", sec.Name))
 				}
 			}
 			s.confirmDlg.Active = false
@@ -482,7 +482,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 			if err := s.svc.ExportBackup(ctx, target); err != nil {
 				s.SetStatus(fmt.Sprintf("Backup error: %v", err))
 			} else {
-				s.SetStatus(fmt.Sprintf("✓ Backup exported to %s", target))
+				s.SetStatus(fmt.Sprintf("[OK] Backup exported to %s", target))
 			}
 			s.mode = s.prevMode
 			return false
@@ -531,7 +531,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 			if err := s.svc.DeleteProject(ctx, s.deleteProjectID); err != nil {
 				s.SetStatus(fmt.Sprintf("Delete failed: %v", err))
 			} else {
-				s.SetStatus(fmt.Sprintf("✓ Project '%s' and its secrets were deleted.", s.deleteProjName))
+				s.SetStatus(fmt.Sprintf("[OK] Project '%s' and its secrets were deleted.", s.deleteProjName))
 			}
 			s.deletePassInput.Clear()
 			s.deleteProjectID = ""
@@ -577,7 +577,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 			if err != nil {
 				s.SetStatus(fmt.Sprintf("Init error: %v", err))
 			} else {
-				s.SetStatus(fmt.Sprintf("✓ Initialized project: %s", proj.CanonicalPath))
+				s.SetStatus(fmt.Sprintf("[OK] Initialized project: %s", proj.CanonicalPath))
 			}
 			s.customInitPath.Clear()
 			s.mode = ModeGlobalProjects
@@ -615,7 +615,7 @@ func (s *Screens) runScan() {
 
 	s.scanList.SetItems(items)
 	if len(findings) == 0 {
-		s.SetStatus("✓ No plaintext credential leaks detected!")
+		s.SetStatus("[OK] No plaintext credential leaks detected.")
 	}
 }
 
