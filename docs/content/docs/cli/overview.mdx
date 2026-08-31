@@ -34,7 +34,7 @@ mf current
 | `mf get` | `mf get KEY` | Retrieves decrypted secret value (stdout or clipboard) | `--clip` / `-c` |
 | `mf list` | `mf list` | Lists all registered secret keys for the current project | `--json` |
 | `mf delete` | `mf delete KEY` | Removes a secret key from the encrypted vault | Key name |
-| `mf import` | `mf import [.env]` | Bulk-imports an existing `.env` file directly into vault | Path to `.env` |
+| `mf import` | `mf import [.env]` | Bulk-imports `.env` into vault with optional plaintext deletion | `--delete`, `--no-delete` |
 | `mf rotate-password`| `mf rotate-password` | Re-encrypts all project vaults with a new master password | Interactive prompts |
 | `mf run` | `mf run <cmd>` | Explicit alias for direct process execution | `--isolated` |
 | `mf scan` | `mf scan [dir]` | Scans source tree for plaintext secrets and API keys | `--depth`, `--fix` |

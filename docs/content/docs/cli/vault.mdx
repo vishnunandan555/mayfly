@@ -84,10 +84,17 @@ mf delete <KEY>
 Bulk-import an existing `.env` file directly into your encrypted project vault.
 
 ```bash
+# Interactive import (prompts to delete plaintext file after success)
 mf import [.env]
+
+# Automatically delete the plaintext file upon successful import
+mf import .env --delete
+
+# Keep the plaintext file without prompting
+mf import .env --no-delete
 ```
 
-Parses standard `.env` formats (handles comments, `export ` prefixes, single and double quotes) and registers all valid secrets into the vault.
+Parses standard `.env` formats (handles comments, `export ` prefixes, single and double quotes) and registers all valid secrets into the vault. Upon successful import, MayFly interactively asks if you want to securely delete the plaintext `.env` file from disk so credentials are never left exposed.
 
 ---
 

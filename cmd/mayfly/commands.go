@@ -362,8 +362,17 @@ func cmdMigrate(ctx context.Context, svc *application.Service, args []string, st
 
 func cmdImport(ctx context.Context, svc *application.Service, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	targetFile := ".env"
-	if len(args) >= 1 {
-		targetFile = args[0]
+	forceDelete := false
+	noDelete := false
+
+	for _, arg := range args {
+		if arg == "--delete" || arg == "-d" {
+			forceDelete = true
+		} else if arg == "--no-delete" {
+			noDelete = true
+		} else if !strings.HasPrefix(arg, "-") {
+			targetFile = arg
+		}
 	}
 
 	cwd, _ := os.Getwd()
@@ -402,6 +411,34 @@ func cmdImport(ctx context.Context, svc *application.Service, args []string, std
 	}
 
 	fmt.Fprintf(stdout, "[OK] Imported %d secrets from %s into project %s\n", count, targetFile, proj.ID)
+
+	if count > 0 {
+		if forceDelete {
+			if rmErr := os.Remove(envPath); rmErr != nil {
+				fmt.Fprintf(stderr, "mayfly: warning: failed to delete %s: %v\n", targetFile, rmErr)
+			} else {
+				fmt.Fprintf(stdout, "[OK] Deleted plaintext %s from disk.\n", targetFile)
+			}
+		} else if !noDelete {
+			f, isFile := stdin.(*os.File)
+			isTerm := isFile && terminal.IsTerminal(f)
+			if isTerm && !isTesting() {
+				fmt.Fprintf(stdout, "\nWould you like to delete the plaintext %s file from disk now? [y/N]: ", targetFile)
+				resp, _ := readLine(stdin)
+				cleanResp := strings.ToLower(strings.TrimSpace(resp))
+				if cleanResp == "y" || cleanResp == "yes" {
+					if rmErr := os.Remove(envPath); rmErr != nil {
+						fmt.Fprintf(stderr, "mayfly: warning: failed to delete %s: %v\n", targetFile, rmErr)
+					} else {
+						fmt.Fprintf(stdout, "[OK] Deleted plaintext %s from disk.\n", targetFile)
+					}
+				} else {
+					fmt.Fprintf(stdout, "Kept %s on disk. (Tip: add it to .gitignore or remove it when ready).\n", targetFile)
+				}
+			}
+		}
+	}
+
 	return 0
 }
 

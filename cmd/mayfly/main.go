@@ -154,7 +154,7 @@ Usage:
   mayfly get <NAME> [--clip]          Output decrypted secret or copy to clipboard (-c)
   mayfly list [--json]                List secret keys for the current project
   mayfly delete <NAME>                Remove a secret from the vault
-  mayfly import [FILE]                Import secrets from .env file into vault (default: .env)
+  mayfly import [FILE] [--delete]     Import secrets from .env file into vault (default: .env)
   mayfly rotate-password              Re-encrypt vault with a new master password
   mayfly run <COMMAND> [ARGS...]      Explicit process execution alias
   mayfly scan [DIR]                   Scan codebase for plaintext secret leaks (.mayflyignore supported)

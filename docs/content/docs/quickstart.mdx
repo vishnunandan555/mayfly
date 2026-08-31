@@ -83,7 +83,9 @@ If you already have a `.env` file, you can bulk-import it directly into the vaul
 
 ```bash
 mf import .env
-# -> Successfully imported 8 secrets into project vault.
+# -> [OK] Imported 8 secrets from .env into project
+# -> Would you like to delete the plaintext .env file from disk now? [y/N]: y
+# -> [OK] Deleted plaintext .env from disk.
 ```
 
 To list registered variable names for the project:

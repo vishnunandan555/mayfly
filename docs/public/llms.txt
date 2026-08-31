@@ -9,9 +9,17 @@
 - [Security Model](https://mayfly.dev/docs/architecture/security-model): PBKDF2-HMAC-SHA256 (600k rounds), AES-256-GCM AEAD, memory zeroing.
 - [In-Memory Injection](https://mayfly.dev/docs/architecture/in-memory-injection): How OS exec primitives avoid disk writes.
 - [Audit Chain](https://mayfly.dev/docs/architecture/audit-chain): SHA-256 linked cryptographic audit log.
-- [CLI Reference](https://mayfly.dev/docs/cli/overview): All CLI commands (`mf`, `mf set`, `mf get`, `mf run`, `mf scan`, `mf audit`).
+- [CLI Reference](https://mayfly.dev/docs/cli/overview): All CLI commands (`mf`, `mf set`, `mf get`, `mf run`, `mf scan`, `mf audit`, `mf completion`).
 - [Zero-Dependency Audit](https://mayfly.dev/docs/reference/zero-dependency-audit): Stdlib substitution matrix and proof.
-- [Node.js & Next.js Guide](https://mayfly.dev/docs/guides/nodejs): Using MayFly with Node.js and Next.js.
-- [Python Guide](https://mayfly.dev/docs/guides/python): Using MayFly with Python (FastAPI, Django, Flask).
+- [Universal Stack Guide](https://mayfly.dev/docs/guides/universal): Using MayFly with any language, framework, or CLI tool.
+- [Node.js & Next.js Guide](https://mayfly.dev/docs/guides/nodejs): Using MayFly with Node.js, Next.js, Express, NestJS.
+- [Python Guide](https://mayfly.dev/docs/guides/python): Using MayFly with Python (FastAPI, Django, Flask, Celery).
+- [Go (Golang) Guide](https://mayfly.dev/docs/guides/golang): Using MayFly with Go (os.Getenv, Air).
+- [Rust Guide](https://mayfly.dev/docs/guides/rust): Using MayFly with Rust (Cargo, std::env::var).
+- [Java & Kotlin Guide](https://mayfly.dev/docs/guides/jvm): Using MayFly with Spring Boot, Gradle, Maven.
+- [Ruby & Rails Guide](https://mayfly.dev/docs/guides/ruby): Using MayFly with Rails, Puma, Bundler.
+- [PHP & Laravel Guide](https://mayfly.dev/docs/guides/php): Using MayFly with Laravel, Artisan, Composer.
+- [.NET & C# Guide](https://mayfly.dev/docs/guides/dotnet): Using MayFly with ASP.NET Core, dotnet CLI.
+- [Bun & Deno Guide](https://mayfly.dev/docs/guides/bun-deno): Using MayFly with Bun and Deno.
 - [Docker Guide](https://mayfly.dev/docs/guides/docker): Using MayFly in containers.
 - [Troubleshooting](https://mayfly.dev/docs/guides/troubleshooting): Resolving common errors and questions.

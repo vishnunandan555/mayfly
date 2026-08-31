@@ -149,6 +149,19 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 		t.Fatalf("import failed: code=%d, err=%s, out=%s", code, stderr, stdout)
 	}
 
+	// 10b. Import .env with --delete
+	envFile2 := filepath.Join(projDir, ".env.staging")
+	if err := os.WriteFile(envFile2, []byte("STAGING_KEY=secret123\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr = executeMayfly(t, []string{"import", envFile2, "--delete"}, "masterpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "Deleted plaintext") {
+		t.Fatalf("import --delete failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+	if _, err := os.Stat(envFile2); !os.IsNotExist(err) {
+		t.Fatalf("expected .env.staging to be deleted after import --delete")
+	}
+
 	// 11. List secrets as JSON
 	code, stdout, stderr = executeMayfly(t, []string{"list", "--json"}, "masterpass\n", projDir)
 	if code != 0 || !strings.Contains(stdout, "STRIPE_KEY") || !strings.Contains(stdout, "REDIS_PORT") {
