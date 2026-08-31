@@ -104,27 +104,6 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 		t.Fatalf("unexpected list output: %s", stdout)
 	}
 
-<<<<<<< HEAD
-	// 5. Run command with injected secret (explicit 'run')
-	runScript := "echo DB=$DATABASE_URL"
-	if runtime.GOOS == "windows" {
-		runScript = "echo DB=%DATABASE_URL%"
-	}
-	code, stdout, stderr = executeMayfly(t, append([]string{"run"}, shellCmd(runScript)...), "masterpass\n", projDir)
-	if code != 0 {
-		t.Fatalf("run failed: code=%d, err=%s", code, stderr)
-	}
-	if !strings.Contains(stdout, "DB=postgres://localhost/db") {
-		t.Fatalf("unexpected run output: %s", stdout)
-	}
-
-	// 5b. Direct command execution without 'run' (e.g. 'mayfly <cmd>' / 'mf <cmd>')
-	directScript := "echo DIRECT_DB=$DATABASE_URL"
-	if runtime.GOOS == "windows" {
-		directScript = "echo DIRECT_DB=%DATABASE_URL%"
-	}
-	code, stdout, stderr = executeMayfly(t, shellCmd(directScript), "masterpass\n", projDir)
-=======
 	// 5. Direct transparent command execution (e.g. 'mayfly <cmd>' / 'mf <cmd>')
 	var execArgs []string
 	if runtime.GOOS == "windows" {
@@ -133,7 +112,6 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 		execArgs = []string{"sh", "-c", "echo DIRECT_DB=$DATABASE_URL"}
 	}
 	code, stdout, stderr = executeMayfly(t, execArgs, "masterpass\n", projDir)
->>>>>>> 2449f154ba575ec0bb8803642cbb78f38d9b5e45
 	if code != 0 {
 		t.Fatalf("direct execution failed: code=%d, err=%s", code, stderr)
 	}
