@@ -303,7 +303,16 @@ func cmdDelete(ctx context.Context, svc *application.Service, args []string, std
 	return 0
 }
 
+func cmdRun(ctx context.Context, svc *application.Service, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) < 1 {
+		fmt.Fprintln(stderr, "usage: mayfly run <COMMAND> [ARGS...]")
+		return 2
+	}
+	return executeTargetProcess(ctx, svc, args, stdin, stdout, stderr)
+}
+
 func cmdScan(ctx context.Context, svc *application.Service, args []string, stdout, stderr io.Writer) int {
+
 	targetDir := "."
 	jsonOutput := false
 	severityFilter := ""

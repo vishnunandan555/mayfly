@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
-	"mayfly/pkg/domain"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"mayfly/pkg/domain"
 )
 
 func executeMayfly(t *testing.T, args []string, input string, dir string) (int, string, string) {
@@ -31,6 +33,7 @@ func executeMayfly(t *testing.T, args []string, input string, dir string) (int, 
 func TestCompleteCLIWorkflow(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
 
 	projDir := filepath.Join(t.TempDir(), "test-app")
 	if err := os.MkdirAll(projDir, 0755); err != nil {
@@ -88,14 +91,36 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 		t.Fatalf("unexpected list output: %s", stdout)
 	}
 
-	// 5. Direct command execution (e.g. 'mayfly <cmd>' / 'mf <cmd>')
-	code, stdout, stderr = executeMayfly(t, []string{"sh", "-c", "echo DIRECT_DB=$DATABASE_URL"}, "masterpass\n", projDir)
+	// 5. Direct transparent command execution (e.g. 'mayfly <cmd>' / 'mf <cmd>')
+	var execArgs []string
+	if runtime.GOOS == "windows" {
+		execArgs = []string{"cmd.exe", "/c", "echo DIRECT_DB=%DATABASE_URL%"}
+	} else {
+		execArgs = []string{"sh", "-c", "echo DIRECT_DB=$DATABASE_URL"}
+	}
+	code, stdout, stderr = executeMayfly(t, execArgs, "masterpass\n", projDir)
 	if code != 0 {
 		t.Fatalf("direct execution failed: code=%d, err=%s", code, stderr)
 	}
 	if !strings.Contains(stdout, "DIRECT_DB=postgres://localhost/db") {
 		t.Fatalf("unexpected direct execution output: %s", stdout)
 	}
+
+	// 5b. Explicit command execution via 'mayfly run <cmd>'
+	var runArgs []string
+	if runtime.GOOS == "windows" {
+		runArgs = append([]string{"run", "cmd.exe", "/c"}, "echo EXPLICIT_DB=%DATABASE_URL%")
+	} else {
+		runArgs = []string{"run", "sh", "-c", "echo EXPLICIT_DB=$DATABASE_URL"}
+	}
+	code, stdout, stderr = executeMayfly(t, runArgs, "masterpass\n", projDir)
+	if code != 0 {
+		t.Fatalf("explicit run execution failed: code=%d, err=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "EXPLICIT_DB=postgres://localhost/db") {
+		t.Fatalf("unexpected explicit run output: %s", stdout)
+	}
+
 
 	// 6. Plaintext scanner
 	code, stdout, stderr = executeMayfly(t, []string{"scan"}, "", projDir)

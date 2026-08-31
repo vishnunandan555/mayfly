@@ -127,7 +127,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "delete":
 		return cmdDelete(ctx, svc, subArgs, stdin, stdout, stderr)
 
+	case "run":
+		return cmdRun(ctx, svc, subArgs, stdin, stdout, stderr)
+
 	case "scan":
+
 		return cmdScan(ctx, svc, subArgs, stdout, stderr)
 
 	case "audit":
