@@ -60,3 +60,46 @@ func TestAuditLogChainAndVerification(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditLogBOMHandling(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.log")
+
+	log, err := New(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := log.Record(ctx, domain.ActionProjectInit, "proj1", "", "", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Prepend UTF-8 BOM as Windows Notepad or PowerShell Out-File might do
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bomData := append([]byte("\xef\xbb\xbf"), data...)
+	if err := os.WriteFile(logPath, bomData, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should successfully initialize and verify despite BOM
+	logBOM, err := New(logPath)
+	if err != nil {
+		t.Fatalf("expected New() to succeed with UTF-8 BOM, got: %v", err)
+	}
+
+	if err := logBOM.Verify(ctx); err != nil {
+		t.Fatalf("expected Verify() to succeed with UTF-8 BOM, got: %v", err)
+	}
+
+	events, err := logBOM.Events(ctx)
+	if err != nil {
+		t.Fatalf("expected Events() to succeed with UTF-8 BOM, got: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+}

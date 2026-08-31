@@ -1,6 +1,7 @@
 package project
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -63,6 +64,7 @@ func (m *MetaStore) readLocked() (VaultMeta, error) {
 		}
 		return VaultMeta{}, err
 	}
+	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	var meta VaultMeta
 	if err := json.Unmarshal(data, &meta); err != nil {
 		// If meta file is corrupt, start fresh rather than blocking the user.

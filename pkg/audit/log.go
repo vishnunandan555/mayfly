@@ -2,6 +2,7 @@ package audit
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -98,7 +99,7 @@ func (l *Log) scanAndVerifyLocked() (string, uint64, error) {
 	var seq uint64 = 0
 
 	for scanner.Scan() {
-		line := scanner.Bytes()
+		line := bytes.TrimPrefix(scanner.Bytes(), []byte("\xef\xbb\xbf"))
 		if len(line) == 0 {
 			continue
 		}
@@ -227,7 +228,7 @@ func (l *Log) Events(ctx context.Context) ([]domain.AuditEvent, error) {
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
-		line := scanner.Bytes()
+		line := bytes.TrimPrefix(scanner.Bytes(), []byte("\xef\xbb\xbf"))
 		if len(line) == 0 {
 			continue
 		}

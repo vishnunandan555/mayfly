@@ -1,6 +1,7 @@
 package project
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -69,6 +70,7 @@ func (r *Registry) loadLocked() (map[string]domain.Project, error) {
 		}
 		return nil, err
 	}
+	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 
 	var projects map[string]domain.Project
 	if err := json.Unmarshal(data, &projects); err != nil {
