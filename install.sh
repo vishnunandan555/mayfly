@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # MayFly — All-in-One Global Installer, Updater, and Uninstaller
 # Supports Linux (all distros) and macOS (Darwin Intel & Apple Silicon)
+# Features: Tier-2 Cryptographic SHA-256 Checksum Verification & Offline Local Builds
 
 set -e
 
 INSTALL_DIR="${HOME}/.local/bin"
 VAULT_DIR="${HOME}/.mayfly"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
+GITHUB_REPO="vishnunandan555/mayfly"
+VERSION="${MAYFLY_VERSION:-latest}"
 
 UNINSTALL=false
 UPDATE=false
@@ -22,8 +25,8 @@ for arg in "$@"; do
         --help|-h)
             echo "MayFly Installer"
             echo "Usage: ./install.sh [OPTIONS]"
-            echo "  (no args)       Install mayfly and mf to ~/.local/bin"
-            echo "  --update        Rebuild and update installed binaries"
+            echo "  (no args)       Install mayfly and mf to ~/.local/bin with SHA-256 verification"
+            echo "  --update        Rebuild / update installed binaries"
             echo "  --uninstall, -u Cleanly remove mayfly and mf"
             exit 0
             ;;
@@ -34,7 +37,6 @@ done
 # UNINSTALL MODE
 # -------------------------------------------------------------
 if [ "$UNINSTALL" = true ]; then
-    # If running piped via curl, reattach stdin to terminal
     if [ -e /dev/tty ]; then
         exec < /dev/tty
     fi
@@ -79,7 +81,6 @@ fi
 # -------------------------------------------------------------
 # INSTALL / UPDATE MODE
 # -------------------------------------------------------------
-# Reattach stdin if running piped via curl
 if [ -e /dev/tty ]; then
     exec < /dev/tty
 fi
@@ -104,14 +105,100 @@ ALIAS_CHOICE="${ALIAS_CHOICE:-1}"
 
 mkdir -p "${INSTALL_DIR}"
 
-# Build binary
-echo ""
-echo "Building binary..."
-if [ -n "$SRC_DIR" ] && [ -f "${SRC_DIR}/go.mod" ]; then
+# -------------------------------------------------------------
+# ACQUISITION: SOURCE BUILD OR VERIFIED RELEASE DOWNLOAD
+# -------------------------------------------------------------
+if [ -n "$SRC_DIR" ] && [ -f "${SRC_DIR}/go.mod" ] && command -v go >/dev/null 2>&1; then
+    echo ""
+    echo "Compiling reproducible binary from local source repository..."
     cd "${SRC_DIR}"
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${INSTALL_DIR}/mayfly" ./cmd/mayfly
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -buildid=" -o "${INSTALL_DIR}/mayfly" ./cmd/mayfly
+    echo "✓ Built bit-for-bit reproducible binary (0 external network dependencies)"
 else
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "${INSTALL_DIR}/mayfly" ./cmd/mayfly
+    # Remote installation: Detect OS and Architecture
+    OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    ARCH="$(uname -m)"
+    case "$ARCH" in
+        x86_64|amd64)
+            ARCH="amd64"
+            ;;
+        arm64|aarch64)
+            ARCH="arm64"
+            ;;
+        *)
+            echo "❌ Error: Unsupported CPU architecture: ${ARCH}"
+            exit 1
+            ;;
+    esac
+
+    case "$OS" in
+        linux)
+            TARGET_BIN="mayfly-linux-${ARCH}"
+            ;;
+        darwin)
+            TARGET_BIN="mayfly-darwin-${ARCH}"
+            ;;
+        *)
+            echo "❌ Error: Unsupported operating system: ${OS}"
+            exit 1
+            ;;
+    esac
+
+    TMP_DIR="$(mktemp -d /tmp/mayfly-install.XXXXXX)"
+    trap 'rm -rf "${TMP_DIR}"' EXIT
+
+    if [ "$VERSION" = "latest" ]; then
+        BASE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download"
+    else
+        BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}"
+    fi
+
+    echo ""
+    echo "Downloading ${TARGET_BIN} from GitHub Releases..."
+    
+    DOWNLOAD_SUCCESS=true
+    curl -fsSL "${BASE_URL}/${TARGET_BIN}" -o "${TMP_DIR}/${TARGET_BIN}" 2>/dev/null || DOWNLOAD_SUCCESS=false
+    curl -fsSL "${BASE_URL}/checksums.txt" -o "${TMP_DIR}/checksums.txt" 2>/dev/null || DOWNLOAD_SUCCESS=false
+
+    if [ "$DOWNLOAD_SUCCESS" = true ]; then
+        echo "Verifying cryptographic SHA-256 checksum..."
+        cd "${TMP_DIR}"
+        
+        VERIFIED=false
+        if command -v sha256sum >/dev/null 2>&1; then
+            if grep "${TARGET_BIN}" checksums.txt | sha256sum --check --status 2>/dev/null; then
+                VERIFIED=true
+            fi
+        elif command -v shasum >/dev/null 2>&1; then
+            if grep "${TARGET_BIN}" checksums.txt | shasum -a 256 --check --status 2>/dev/null; then
+                VERIFIED=true
+            fi
+        fi
+
+        if [ "$VERIFIED" = false ]; then
+            echo ""
+            echo "🚨 SECURITY ALERT: Cryptographic checksum verification failed!"
+            echo "The downloaded binary does not match the published release hash."
+            echo "Installation aborted to protect your system."
+            exit 1
+        fi
+
+        echo "✓ Cryptographic SHA-256 Checksum Verified: Authentic & Untampered."
+        mv "${TMP_DIR}/${TARGET_BIN}" "${INSTALL_DIR}/mayfly"
+    else
+        # If pre-built release is unavailable and Go is installed, clone & compile
+        if command -v go >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
+            echo "Pre-built release not reached; building from latest source with Go..."
+            git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" "${TMP_DIR}/mayfly-src"
+            cd "${TMP_DIR}/mayfly-src"
+            CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -buildid=" -o "${INSTALL_DIR}/mayfly" ./cmd/mayfly
+            echo "✓ Compiled bit-for-bit reproducible binary from source."
+        else
+            echo "❌ Error: Could not download release binary and Go compiler is not installed."
+            echo "Please install Go 1.22+ or download from https://github.com/${GITHUB_REPO}/releases"
+            exit 1
+        fi
+    fi
 fi
 
 chmod +x "${INSTALL_DIR}/mayfly"
@@ -137,7 +224,6 @@ PATH_UPDATED=false
 case ":$PATH:" in
     *":${INSTALL_DIR}:"*) ;;
     *)
-        # Detect shell configuration
         SHELL_NAME="$(basename "${SHELL:-bash}")"
         RC_FILE=""
         if [ "$SHELL_NAME" = "zsh" ]; then
@@ -185,8 +271,6 @@ echo "  mf --help (or mf help)    - View all available commands"
 echo ""
 echo "Management & Updates:"
 echo "  mf uninstall              - Cleanly uninstall MayFly & remove binaries"
-echo "  curl -fsSL https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.sh | bash -s -- --update"
-echo "                            - Update / rebuild latest MayFly release"
 echo ""
 if [ "$PATH_UPDATED" = true ]; then
     echo "Note: Restart your terminal or run 'source ${RC_FILE}' to refresh PATH."

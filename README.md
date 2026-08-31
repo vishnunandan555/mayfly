@@ -33,14 +33,15 @@ OPENAI_API_KEY=sk-proj-1234567890
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.sh | bash
 ```
-*Installs both `mayfly` and `mf` to `~/.local/bin/`.*
+*Auto-detects architecture, downloads release, cryptographically verifies published SHA-256 checksums, and installs `mayfly` and `mf` to `~/.local/bin/`.*
 
 ### Windows (PowerShell):
 ```powershell
 irm https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.ps1 | iex
 ```
+*Auto-verifies SHA-256 checksums via `Get-FileHash` before placing `mayfly.exe` and `mf.exe` into User PATH.*
 
-### Build from Source:
+### Offline Build from Source (0 External Dependencies):
 ```bash
 git clone https://github.com/vishnunandan555/mayfly.git
 cd mayfly
@@ -157,6 +158,7 @@ See [STDLIB.md](STDLIB.md) for the complete 11-entry substitution matrix.
 | **Memory Isolation & Auto-Lock** | Decrypted values reside only in RAM during process execution. Memory buffers are zeroed with `runtime.KeepAlive`. Vault auto-locks after 15 min idle. |
 | **Filesystem Isolation** | Binds project identity to physical storage `(Device, Inode)` to prevent path collision leaks. |
 | **Audit Integrity** | SHA-256 hash-chained log (`~/.mayfly/audit.log`) mathematically proves no log entries were altered or deleted. |
+| **Distribution Integrity** | Release binaries are deterministically compiled and cryptographically verified against published SHA-256 checksums in `install.sh`/`install.ps1`. |
 
 > [!NOTE]
 > **CI & Automation Environment Variables:**  

@@ -50,5 +50,18 @@ deps-proof:
 	@go list -f '{{.ImportPath}}: {{.Imports}}' ./... >> deps-proof.txt
 	@echo "Generated deps-proof.txt (0 external dependencies)"
 
+release-artifacts:
+	@echo "Building reproducible multi-platform release artifacts..."
+	@mkdir -p dist
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -buildid=" -o dist/mayfly-linux-amd64 ./cmd/mayfly
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w -buildid=" -o dist/mayfly-linux-arm64 ./cmd/mayfly
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="-s -w -buildid=" -o dist/mayfly-darwin-amd64 ./cmd/mayfly
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="-s -w -buildid=" -o dist/mayfly-darwin-arm64 ./cmd/mayfly
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -buildid=" -o dist/mayfly-windows-amd64.exe ./cmd/mayfly
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags="-s -w -buildid=" -o dist/mayfly-windows-arm64.exe ./cmd/mayfly
+	@cd dist && sha256sum mayfly-* > checksums.txt
+	@cd dist && sha256sum --check checksums.txt
+	@echo "✅ Generated and verified all release artifacts in dist/ with checksums.txt"
+
 clean:
-	rm -rf bin/
+	rm -rf bin/ dist/

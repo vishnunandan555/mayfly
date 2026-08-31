@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build & Publish Release Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          check-latest: true
+
+      - name: Build Reproducible Multi-Platform Binaries
+        run: |
+          mkdir -p dist
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          if [ -z "$TAG_VER" ] || [ "$TAG_VER" = "main" ]; then
+            TAG_VER="1.0.0"
+          fi
+          
+          LDFLAGS="-s -w -buildid= -X mayfly/pkg/domain.Version=${TAG_VER}"
+          
+          # Linux AMD64 & ARM64
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/mayfly-linux-amd64 ./cmd/mayfly
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/mayfly-linux-arm64 ./cmd/mayfly
+          
+          # macOS (Darwin) AMD64 & Apple Silicon (ARM64)
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/mayfly-darwin-amd64 ./cmd/mayfly
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/mayfly-darwin-arm64 ./cmd/mayfly
+          
+          # Windows AMD64 & ARM64
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/mayfly-windows-amd64.exe ./cmd/mayfly
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/mayfly-windows-arm64.exe ./cmd/mayfly
+
+      - name: Generate Cryptographic SHA-256 Checksums
+        run: |
+          cd dist
+          sha256sum mayfly-* > checksums.txt
+          cat checksums.txt
+
+      - name: Verify Checksums Integrity
+        run: |
+          cd dist
+          sha256sum --check checksums.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false

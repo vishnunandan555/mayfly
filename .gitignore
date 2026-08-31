@@ -1,5 +1,6 @@
 # Build Binaries
 bin/
+dist/
 *.exe
 
 # Test Playground & Internal Reference Guides

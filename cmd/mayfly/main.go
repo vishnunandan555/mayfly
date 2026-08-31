@@ -79,7 +79,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 0
 
 	case "version", "-v", "--version":
-		fmt.Fprintln(stdout, "mayfly v1.0.0 (zero-dependency)")
+		fmt.Fprintf(stdout, "mayfly v%s (zero-dependency)\n", domain.Version)
 		return 0
 
 	case "c", "current", "tui":

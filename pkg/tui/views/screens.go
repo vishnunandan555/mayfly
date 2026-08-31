@@ -505,7 +505,7 @@ func (s *Screens) Draw(frame *terminal.Frame) {
 	footerRect := split[2]
 
 	// Draw Header
-	frame.DrawBox(headerRect, terminal.Style{Foreground: terminal.ColorBrightCyan}, "MayFly — Zero-Dependency Secrets Workspace")
+	frame.DrawBox(headerRect, terminal.Style{Foreground: terminal.ColorBrightCyan}, fmt.Sprintf("MayFly v%s — Zero-Dependency Secrets Workspace", domain.Version))
 	headerText := "Secure RAM Environment Injection · AES-256-GCM Vault"
 	frame.DrawText(headerRect.Min.Row+1, headerRect.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightWhite}, headerText)
 

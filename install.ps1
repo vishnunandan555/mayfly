@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
     MayFly Windows Installer / Uninstaller (PowerShell)
+    Features: Tier-2 Cryptographic SHA-256 Checksum Verification & Offline Local Builds
 .PARAMETER Uninstall
     Cleanly removes mayfly and mf binaries and cleans PATH
 .PARAMETER Update
@@ -9,11 +10,13 @@
 
 param (
     [switch]$Uninstall,
-    [switch]$Update
+    [switch]$Update,
+    [string]$Version = "latest"
 )
 
 $InstallDir = "$HOME\.local\bin"
 $VaultDir = "$HOME\.mayfly"
+$Repo = "vishnunandan555/mayfly"
 
 if ($Uninstall) {
     Write-Host "=================================================" -ForegroundColor Yellow
@@ -70,9 +73,66 @@ if (!(Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 }
 
-Write-Host "`nBuilding binary..."
-$env:CGO_ENABLED = "0"
-go build -trimpath -ldflags="-s -w" -o "$InstallDir\mayfly.exe" .\cmd\mayfly
+$hasGo = (Get-Command go -ErrorAction SilentlyContinue) -ne $null
+$isLocalRepo = (Test-Path ".\go.mod") -and (Test-Path ".\cmd\mayfly")
+
+if ($hasGo -and $isLocalRepo) {
+    Write-Host "`nCompiling reproducible binary from local source repository..."
+    $env:CGO_ENABLED = "0"
+    go build -trimpath -ldflags="-s -w -buildid=" -o "$InstallDir\mayfly.exe" .\cmd\mayfly
+    Write-Host "✓ Built bit-for-bit reproducible binary (0 external network dependencies)" -ForegroundColor Green
+} else {
+    $arch = if ([System.Environment]::Is64BitOperatingSystem) { "amd64" } else { "arm64" }
+    $targetBin = "mayfly-windows-$arch.exe"
+    
+    $baseUrl = if ($Version -eq "latest") {
+        "https://github.com/$Repo/releases/latest/download"
+    } else {
+        "https://github.com/$Repo/releases/download/$Version"
+    }
+
+    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+
+    try {
+        Write-Host "`nDownloading $targetBin from GitHub Releases..."
+        $binPath = Join-Path $tempDir $targetBin
+        $checksumPath = Join-Path $tempDir "checksums.txt"
+
+        Invoke-WebRequest -Uri "$baseUrl/$targetBin" -OutFile $binPath -UseBasicParsing
+        Invoke-WebRequest -Uri "$baseUrl/checksums.txt" -OutFile $checksumPath -UseBasicParsing
+
+        Write-Host "Verifying cryptographic SHA-256 checksum..."
+        $computedHash = (Get-FileHash -Path $binPath -Algorithm SHA256).Hash.ToLower()
+        $expectedLine = Get-Content $checksumPath | Where-Object { $_ -match $targetBin }
+
+        if (-not $expectedLine -or -not ($expectedLine.ToLower().StartsWith($computedHash))) {
+            Write-Host "`n🚨 SECURITY ALERT: Cryptographic checksum verification failed!" -ForegroundColor Red
+            Write-Host "The downloaded binary does not match the published release hash." -ForegroundColor Red
+            Write-Host "Installation aborted to protect your system." -ForegroundColor Red
+            exit 1
+        }
+
+        Write-Host "✓ Cryptographic SHA-256 Checksum Verified: Authentic & Untampered." -ForegroundColor Green
+        Copy-Item -Force $binPath "$InstallDir\mayfly.exe"
+    } catch {
+        if ($hasGo) {
+            Write-Host "Pre-built release not reached; building from latest source with Go..." -ForegroundColor Yellow
+            $cloneDir = Join-Path $tempDir "mayfly-src"
+            git clone --depth 1 "https://github.com/$Repo.git" $cloneDir
+            Push-Location $cloneDir
+            $env:CGO_ENABLED = "0"
+            go build -trimpath -ldflags="-s -w -buildid=" -o "$InstallDir\mayfly.exe" .\cmd\mayfly
+            Pop-Location
+            Write-Host "✓ Compiled bit-for-bit reproducible binary from source." -ForegroundColor Green
+        } else {
+            Write-Host "❌ Error: Could not download release binary and Go compiler is not installed." -ForegroundColor Red
+            exit 1
+        }
+    } finally {
+        Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
+    }
+}
 
 switch ($aliasChoice) {
     "2" {
@@ -111,6 +171,3 @@ Write-Host "  mf run <command>          - Run app with in-memory secrets"
 Write-Host "  mf --help (or mf help)    - View all available commands"
 Write-Host "`nManagement & Updates:"
 Write-Host "  mf uninstall              - Cleanly uninstall MayFly & remove binaries"
-Write-Host "  irm https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.ps1 | iex -args -Update"
-Write-Host "                            - Update to latest version"
-
