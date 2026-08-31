@@ -44,7 +44,19 @@ All subsystems are implemented using standard Go runtime packages:
 
 ## Reproducible Dependency Audit Command
 
-To audit the compiled binary for external dependencies:
+To audit the codebase and generate a formal zero-dependency proof manifest:
+
+```bash
+make deps-proof
+```
+
+To verify bit-for-bit reproducible build determinism:
+
+```bash
+make reproducible
+```
+
+To list modules directly:
 
 ```bash
 go list -m all
@@ -55,8 +67,8 @@ Expected output:
 mayfly
 ```
 
-To list all standard library packages imported across the codebase:
+To list all package imports across the codebase:
 
 ```bash
-go list -f '{{.ImportPath}}' ./...
+go list -f '{{.ImportPath}}: {{.Imports}}' ./...
 ```

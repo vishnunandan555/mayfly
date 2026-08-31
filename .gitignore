@@ -11,6 +11,9 @@ docs/.source/
 docs/dist/
 HANDOVER.md
 TESTING.md
+HACKATHON_*.md
+*_STRATEGY.md
+WRITEUP.md
 
 # Backups & Local Data
 *.json.bak

@@ -58,4 +58,4 @@ Every operation (vault initialization, key updates, secret injections, leak scan
 Hash[N] = SHA256(Hash[N-1] + ":" + Timestamp + ":" + Action + ":" + Data)
 ```
 
-If any entry in `~/.mayfly/audit.log` is modified, deleted, or truncated, `mayfly audit verify` will detect the broken cryptographic link immediately.
+If any entry in `~/.mayfly/audit.log` is modified, deleted, or truncated, `mf audit verify` will detect the broken cryptographic link immediately.

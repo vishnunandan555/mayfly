@@ -1,0 +1,11 @@
+# Zero Dependency Hackathon Configuration
+track = "E"
+track_name = "Security & Crypto Utilities"
+secondary_track = "A"
+pitch = "Zero-dependency ephemeral secrets workspace and in-memory process injector built with Go standard library."
+entrypoint = "cmd/mayfly"
+build_command = "make build"
+reproducible_command = "make reproducible"
+test_command = "make test"
+language = "Go"
+runtime_dependencies = 0

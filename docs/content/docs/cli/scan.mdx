@@ -51,10 +51,13 @@ mayfly scan
 mayfly scan ./src --depth 3
 ```
 
-### Auto-Import Discovered `.env` into Vault and Remove from Disk
+### Ignoring Files with .mayflyignore
 
-```bash
-mayfly scan --fix
+You can exclude mock test data, build artifacts, or fixture files by creating a `.mayflyignore` file in your repository root:
+
+```text
+# .mayflyignore
+fixtures/
+test_data/
+*.mock.ts
 ```
-
-When `--fix` is passed, MayFly prompts to import detected key-value pairs directly into the encrypted vault and securely unlinks the plaintext `.env` file.

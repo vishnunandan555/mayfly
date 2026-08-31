@@ -169,18 +169,28 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 
 	switch s.mode {
 	case ModeFirstRunSetup:
-		if event.Type == terminal.KeyTab {
+		if event.Type == terminal.KeyTab || event.Type == terminal.KeyShiftTab || event.Type == terminal.KeyDown || event.Type == terminal.KeyUp {
 			s.passInput.Focused = !s.passInput.Focused
 			s.confirmPass.Focused = !s.confirmPass.Focused
 			return false
 		}
 		if event.Type == terminal.KeyEnter {
+			if s.passInput.Focused && s.confirmPass.Value == "" {
+				if s.passInput.Value == "" {
+					s.SetStatus("Password cannot be empty.")
+					return false
+				}
+				s.passInput.SetFocused(false)
+				s.confirmPass.SetFocused(true)
+				s.SetStatus("Please re-enter password to confirm.")
+				return false
+			}
 			if s.passInput.Value == "" {
 				s.SetStatus("Password cannot be empty.")
 				return false
 			}
 			if s.passInput.Value != s.confirmPass.Value {
-				s.SetStatus("Passwords do not match!")
+				s.SetStatus("Passwords do not match! Please check and try again.")
 				return false
 			}
 			if err := s.svc.InitializeVault(ctx, []byte(s.passInput.Value)); err != nil {
@@ -191,7 +201,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 			s.confirmPass.Clear()
 			s.mode = ModeGlobalProjects
 			s.reloadProjects()
-			s.SetStatus("Vault initialized successfully!")
+			s.SetStatus("Vault initialized successfully! Welcome to MayFly.")
 			return false
 		}
 		if event.Type == terminal.KeyEscape {
@@ -503,15 +513,17 @@ func (s *Screens) Draw(frame *terminal.Frame) {
 	switch s.mode {
 	case ModeFirstRunSetup:
 		inputRects := layout.Split(layout.DirVertical, bodyRect, []layout.Constraint{
-			layout.Fixed(2),
+			layout.Fixed(1),
+			layout.Fixed(1),
 			layout.Fixed(3),
 			layout.Fixed(1),
 			layout.Fixed(3),
 			layout.Flexible(),
 		})
-		frame.DrawText(inputRects[0].Min.Row+1, inputRects[0].Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightYellow, Attributes: terminal.AttrBold}, "CREATE VAULT MASTER PASSWORD")
-		s.passInput.Draw(frame, inputRects[1])
-		s.confirmPass.Draw(frame, inputRects[3])
+		frame.DrawText(inputRects[0].Min.Row, inputRects[0].Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightYellow, Attributes: terminal.AttrBold}, "FIRST-TIME SETUP: CREATE VAULT MASTER PASSWORD")
+		frame.DrawText(inputRects[1].Min.Row, inputRects[1].Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightBlack, Attributes: terminal.AttrDim}, "Choose a password to encrypt your local secrets vault (~/.mayfly/vault.enc)")
+		s.passInput.Draw(frame, inputRects[2])
+		s.confirmPass.Draw(frame, inputRects[4])
 
 	case ModeUnlock:
 		inputRects := layout.Split(layout.DirVertical, bodyRect, []layout.Constraint{

@@ -5,6 +5,8 @@
 
 [![Go Version](https://img.shields.io/badge/go-1.22+-00ADD8?style=flat&logo=go)](go.mod)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-0%20external-brightgreen)](STDLIB.md)
+[![Track](https://img.shields.io/badge/Track-E%20%7C%20Security%20%26%20Crypto-blueviolet)](.zero-dep.toml)
+[![Reproducible Build](https://img.shields.io/badge/build-reproducible%20(+5%20pts)-success)](#-testing--verification)
 [![Platforms](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue)](install.sh)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange)](LICENSE)
 
@@ -164,9 +166,20 @@ See [STDLIB.md](STDLIB.md) for the complete 11-entry substitution matrix.
 
 ## 🧪 Testing & Verification
 
-Run the full automated test suite:
+Run the full automated test suite (including race detector):
 ```bash
 make test
+make test-race
+```
+
+Verify bit-for-bit reproducible build determinism:
+```bash
+make reproducible
+```
+
+Verify zero third-party dependencies:
+```bash
+make deps-proof
 ```
 
 Test cross-compilation across Linux, macOS, and Windows:

@@ -88,15 +88,16 @@ Prompts for your current master password (with echo suppressed), validates it, a
 
 ---
 
-## 🔒 Automated CI Environments & Warnings
+## Automated CI Environments
 
 You can supply the master password non-interactively using the `MAYFLY_VAULT_PASSWORD` environment variable in headless CI pipelines (e.g., GitHub Actions, GitLab CI):
 
 ```bash
 export MAYFLY_VAULT_PASSWORD="ci-vault-password"
-mayfly run npm test
+mf npm test
 ```
 
-> [!WARNING]
-> **Desktop Security Warning:** Do not store `MAYFLY_VAULT_PASSWORD` permanently in your interactive shell configuration (`~/.bashrc` / `~/.zshrc`). On Unix systems, process environment variables can be inspected by other processes owned by the same user via `/proc/<pid>/environ`. Use interactive prompts for local development.
+<Callout type="warn" title="Desktop Security Notice">
+Do not store `MAYFLY_VAULT_PASSWORD` permanently in your shell configuration (`~/.bashrc` / `~/.zshrc`). On Unix systems, environment variables can be inspected by other processes owned by the same user via `/proc/<pid>/environ`. Use interactive prompts for local development.
+</Callout>
 
