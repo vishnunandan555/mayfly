@@ -14,5 +14,6 @@
 * **`Project` & `ProjectVault`:** Workspace metadata entity mapping canonical paths to unique project IDs.
 * **`AuditEvent` & `Action`:** Cryptographically bound audit trail entry types (`secret:injected`, `vault:unlocked`, `password:rotated`, etc.).
 * **`ScanFinding` & `Severity`:** Static analysis diagnostic issue representation with line references and severity classifications.
-* **`Version`:** Canonical single-source-of-truth version string (`0.0.2`).
+* **`Version`:** Canonical single-source-of-truth version string (`0.0.3`).
+
 

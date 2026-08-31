@@ -5,9 +5,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [0.0.3] — 2026-08-31
 
 ### Added
+
 - `mf env [--shell bash|fish|json]` — export all project secrets as shell environment variables (`eval $(mf env)`)
 - `mf status` / `mf doctor` — vault health summary: file, lock state, project count, secret count
 - `mf check` — integrity verification of vault header, audit log hash chain, and stale registry entries

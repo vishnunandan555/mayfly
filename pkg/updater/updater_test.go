@@ -44,11 +44,9 @@ func TestParseSemVerAndCompare(t *testing.T) {
 
 func TestCheckForUpdatesWithMockServer(t *testing.T) {
 	// Mock a release that is strictly newer than the current version.
-	// The mock tag must always be ahead of domain.Version to avoid test rot.
 	mockRelease := ReleaseInfo{
-
-		TagName:     "v0.0.3",
-		Name:        "MayFly v0.0.3",
+		TagName:     "v99.0.0",
+		Name:        "MayFly v99.0.0",
 		Body:        "- Security updates\n- Performance improvements",
 		PublishedAt: "2026-08-31T12:00:00Z",
 	}
@@ -65,20 +63,20 @@ func TestCheckForUpdatesWithMockServer(t *testing.T) {
 		t.Fatalf("CheckForUpdates failed: %v", err)
 	}
 
-	if rel.TagName != "v0.0.3" {
-		t.Errorf("expected tag v0.0.3, got %q", rel.TagName)
+	if rel.TagName != "v99.0.0" {
+		t.Errorf("expected tag v99.0.0, got %q", rel.TagName)
 	}
 
 	if !isNewer {
-		t.Errorf("expected v0.0.3 to be newer than current %s", domain.Version)
+		t.Errorf("expected v99.0.0 to be newer than current %s", domain.Version)
 	}
 }
 
 func TestCheckForUpdatesNotNewerWhenSameVersion(t *testing.T) {
 	// When remote version equals current, isNewer must be false.
 	mockRelease := ReleaseInfo{
-		TagName:     "v0.0.2",
-		Name:        "MayFly v0.0.2",
+		TagName:     "v" + domain.Version,
+		Name:        "MayFly v" + domain.Version,
 		Body:        "Current release",
 		PublishedAt: "2026-08-31T12:00:00Z",
 	}
@@ -99,6 +97,7 @@ func TestCheckForUpdatesNotNewerWhenSameVersion(t *testing.T) {
 		t.Errorf("expected isNewer=false when remote version equals current version")
 	}
 }
+
 
 func TestParseExpectedHash(t *testing.T) {
 	manifest := `# Official SHA-256 Checksums

@@ -11,8 +11,9 @@
 param (
     [switch]$Uninstall,
     [switch]$Update,
-    [string]$Version = "v0.0.2"
+    [string]$Version = "v0.0.3"
 )
+
 
 $InstallDir = "$HOME\.local\bin"
 $VaultDir = "$HOME\.mayfly"
