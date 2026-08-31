@@ -1,25 +1,28 @@
 # MayFly: Zero-Disk Secrets Manager & In-Memory Process Injector
 > Never store passwords or API keys in plaintext .env files again. MayFly encrypts credentials locally with AES-256-GCM + PBKDF2 and injects them directly into child process volatile RAM with 0 external dependencies.
 
+- Full context documentation for LLMs: https://mayfly-docs.vercel.app/llms-full.txt
+- GitHub Repository: https://github.com/vishnunandan555/mayfly
+
 ## Documentation Index
-- [Introduction](https://mayfly.dev/docs): Overview of MayFly, principles, and comparison.
-- [Why MayFly](https://mayfly.dev/docs/why-mayfly): The supply chain threat model of .env files and npm/pip postinstall exfiltration.
-- [Quickstart](https://mayfly.dev/docs/quickstart): 2-minute guide to installing, initializing vault, storing secrets, and running apps.
-- [Concepts](https://mayfly.dev/docs/concepts): Inode isolation, in-memory process execution, cryptographic audit hash chains.
-- [Security Model](https://mayfly.dev/docs/architecture/security-model): PBKDF2-HMAC-SHA256 (600k rounds), AES-256-GCM AEAD, memory zeroing.
-- [In-Memory Injection](https://mayfly.dev/docs/architecture/in-memory-injection): How OS exec primitives avoid disk writes.
-- [Audit Chain](https://mayfly.dev/docs/architecture/audit-chain): SHA-256 linked cryptographic audit log.
-- [CLI Reference](https://mayfly.dev/docs/cli/overview): All CLI commands (`mf`, `mf set`, `mf get`, `mf run`, `mf scan`, `mf audit`, `mf completion`).
-- [Zero-Dependency Audit](https://mayfly.dev/docs/reference/zero-dependency-audit): Stdlib substitution matrix and proof.
-- [Universal Stack Guide](https://mayfly.dev/docs/guides/universal): Using MayFly with any language, framework, or CLI tool.
-- [Node.js & Next.js Guide](https://mayfly.dev/docs/guides/nodejs): Using MayFly with Node.js, Next.js, Express, NestJS.
-- [Python Guide](https://mayfly.dev/docs/guides/python): Using MayFly with Python (FastAPI, Django, Flask, Celery).
-- [Go (Golang) Guide](https://mayfly.dev/docs/guides/golang): Using MayFly with Go (os.Getenv, Air).
-- [Rust Guide](https://mayfly.dev/docs/guides/rust): Using MayFly with Rust (Cargo, std::env::var).
-- [Java & Kotlin Guide](https://mayfly.dev/docs/guides/jvm): Using MayFly with Spring Boot, Gradle, Maven.
-- [Ruby & Rails Guide](https://mayfly.dev/docs/guides/ruby): Using MayFly with Rails, Puma, Bundler.
-- [PHP & Laravel Guide](https://mayfly.dev/docs/guides/php): Using MayFly with Laravel, Artisan, Composer.
-- [.NET & C# Guide](https://mayfly.dev/docs/guides/dotnet): Using MayFly with ASP.NET Core, dotnet CLI.
-- [Bun & Deno Guide](https://mayfly.dev/docs/guides/bun-deno): Using MayFly with Bun and Deno.
-- [Docker Guide](https://mayfly.dev/docs/guides/docker): Using MayFly in containers.
-- [Troubleshooting](https://mayfly.dev/docs/guides/troubleshooting): Resolving common errors and questions.
+- [Introduction](https://mayfly-docs.vercel.app/docs): Overview of MayFly, principles, and comparison.
+- [Why MayFly](https://mayfly-docs.vercel.app/docs/why-mayfly): The supply chain threat model of .env files and npm/pip postinstall exfiltration.
+- [Quickstart](https://mayfly-docs.vercel.app/docs/quickstart): 2-minute guide to installing, initializing vault, storing secrets, and running apps.
+- [Concepts](https://mayfly-docs.vercel.app/docs/concepts): Inode isolation, in-memory process execution, cryptographic audit hash chains.
+- [Security Model](https://mayfly-docs.vercel.app/docs/architecture/security-model): PBKDF2-HMAC-SHA256 (600k rounds), AES-256-GCM AEAD, memory zeroing.
+- [In-Memory Injection](https://mayfly-docs.vercel.app/docs/architecture/in-memory-injection): How OS exec primitives avoid disk writes.
+- [Audit Chain](https://mayfly-docs.vercel.app/docs/architecture/audit-chain): SHA-256 linked cryptographic audit log.
+- [CLI Reference](https://mayfly-docs.vercel.app/docs/cli/overview): All CLI commands (`mf`, `mf set`, `mf get`, `mf run`, `mf scan`, `mf audit`, `mf completion`).
+- [Zero-Dependency Audit](https://mayfly-docs.vercel.app/docs/reference/zero-dependency-audit): Stdlib substitution matrix and proof.
+- [Universal Stack Guide](https://mayfly-docs.vercel.app/docs/guides/universal): Using MayFly with any language, framework, or CLI tool.
+- [Node.js & Next.js Guide](https://mayfly-docs.vercel.app/docs/guides/nodejs): Using MayFly with Node.js, Next.js, Express, NestJS.
+- [Python Guide](https://mayfly-docs.vercel.app/docs/guides/python): Using MayFly with Python (FastAPI, Django, Flask, Celery).
+- [Go (Golang) Guide](https://mayfly-docs.vercel.app/docs/guides/golang): Using MayFly with Go (os.Getenv, Air).
+- [Rust Guide](https://mayfly-docs.vercel.app/docs/guides/rust): Using MayFly with Rust (Cargo, std::env::var).
+- [Java & Kotlin Guide](https://mayfly-docs.vercel.app/docs/guides/jvm): Using MayFly with Spring Boot, Gradle, Maven.
+- [Ruby & Rails Guide](https://mayfly-docs.vercel.app/docs/guides/ruby): Using MayFly with Rails, Puma, Bundler.
+- [PHP & Laravel Guide](https://mayfly-docs.vercel.app/docs/guides/php): Using MayFly with Laravel, Artisan, Composer.
+- [.NET & C# Guide](https://mayfly-docs.vercel.app/docs/guides/dotnet): Using MayFly with ASP.NET Core, dotnet CLI.
+- [Bun & Deno Guide](https://mayfly-docs.vercel.app/docs/guides/bun-deno): Using MayFly with Bun and Deno.
+- [Docker Guide](https://mayfly-docs.vercel.app/docs/guides/docker): Using MayFly in containers.
+- [Troubleshooting](https://mayfly-docs.vercel.app/docs/guides/troubleshooting): Resolving common errors and questions.
