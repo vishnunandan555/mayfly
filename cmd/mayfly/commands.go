@@ -666,6 +666,8 @@ func cmdUninstall(stdin io.Reader, stdout io.Writer) int {
 	binPaths := []string{
 		filepath.Join(home, ".local", "bin", "mayfly"),
 		filepath.Join(home, ".local", "bin", "mf"),
+		filepath.Join(home, ".local", "bin", "mayfly.exe"),
+		filepath.Join(home, ".local", "bin", "mf.exe"),
 		"/usr/local/bin/mayfly",
 		"/usr/local/bin/mf",
 	}
