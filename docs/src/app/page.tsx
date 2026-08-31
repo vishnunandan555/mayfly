@@ -28,10 +28,18 @@ import {
   HelpCircle,
   Database,
   RefreshCw,
+  Menu,
   X,
+  Code,
+  ShieldAlert,
+  GitBranch,
+  FolderGit2,
+  Search,
+  WifiOff,
 } from 'lucide-react';
 
 export default function HomePage() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [installOs, setInstallOs] = useState<'unix' | 'windows' | 'source'>('unix');
   const [copiedInstall, setCopiedInstall] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
@@ -106,6 +114,63 @@ export default function HomePage() {
     },
   ];
 
+  const useCases = [
+    {
+      icon: <Code className="size-4.5 text-amber-400" />,
+      badge: 'Web & Backend Apps',
+      title: 'Local Development & Hot-Reload',
+      description:
+        'Run Next.js, Vite, Django, Express, or FastAPI with secrets injected strictly into memory. When the dev server shuts down, volatile RAM is zeroed.',
+      command: 'mf npm run dev',
+      link: '/docs/guides/nodejs',
+    },
+    {
+      icon: <ShieldAlert className="size-4.5 text-red-400" />,
+      badge: 'Supply-Chain Defense',
+      title: 'Untrusted Package Installs',
+      description:
+        'Protect against malicious npm postinstall or Python setup scripts that scan disks for .env files and exfiltrate API keys before you even launch your app.',
+      command: 'npm install (0 plaintext .env on disk)',
+      link: '/docs/why-mayfly',
+    },
+    {
+      icon: <GitBranch className="size-4.5 text-emerald-400" />,
+      badge: 'DevOps & CI/CD',
+      title: 'CI Test Runners & Docker',
+      description:
+        'Pass credentials to ephemeral CI test runners and containerized builds without burning plaintext API tokens into disk caches or image layers.',
+      command: 'mf docker compose up',
+      link: '/docs/guides/docker',
+    },
+    {
+      icon: <FolderGit2 className="size-4.5 text-purple-400" />,
+      badge: 'Hardware Inode Binding',
+      title: 'Multi-Project & Monorepo Isolation',
+      description:
+        'Seamlessly switch between multiple microservices or client repositories. Secrets automatically bind to the folder inode without manual profile switching.',
+      command: 'cd ../api && mf run ./server',
+      link: '/docs/concepts',
+    },
+    {
+      icon: <Search className="size-4.5 text-sky-400" />,
+      badge: 'Codebase Auditing',
+      title: 'Plaintext Credential Crawling',
+      description:
+        'Scan your entire codebase, configuration files, and legacy projects for hardcoded tokens, OpenAI keys, or orphaned .env files in milliseconds.',
+      command: 'mf scan',
+      link: '/docs/cli/scan',
+    },
+    {
+      icon: <WifiOff className="size-4.5 text-amber-400" />,
+      badge: '100% Offline & Air-Gapped',
+      title: 'Air-Gapped Workstations & Flights',
+      description:
+        'No cloud accounts, no API rate limits, and zero internet requirement. Work securely on airplanes, remote locations, and strict air-gapped networks.',
+      command: 'mf (Works with 0 network calls)',
+      link: '/docs/reference/zero-dependency-audit',
+    },
+  ];
+
   return (
     <div className="relative min-h-screen bg-[#0d100f] text-neutral-100 selection:bg-amber-950/60 selection:text-amber-200 font-sans">
       {/* Warm Ambient Radial Glows */}
@@ -114,7 +179,7 @@ export default function HomePage() {
 
       {/* Navigation Header */}
       <header className="sticky top-0 z-50 border-b border-white/[0.07] bg-[#0a0d0c]/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2.5 group" id="nav-brand-logo">
               <img
@@ -128,9 +193,13 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <nav className="hidden md:flex items-center gap-7 text-sm font-subtext font-normal" aria-label="Main Navigation">
+          {/* Desktop Navigation Links */}
+          <nav className="hidden md:flex items-center gap-5 lg:gap-7 text-sm font-subtext font-normal" aria-label="Main Navigation">
             <Link href="/docs/why-mayfly" className="text-neutral-400 transition-colors hover:text-amber-400">
               Why MayFly
+            </Link>
+            <Link href="#use-cases" className="text-neutral-400 transition-colors hover:text-amber-400">
+              Use Cases
             </Link>
             <Link href="/docs/quickstart" className="text-neutral-400 transition-colors hover:text-amber-400">
               Quickstart
@@ -145,15 +214,16 @@ export default function HomePage() {
               Zero-Dep Audit
             </Link>
             <Link href="/docs/cli/overview" className="text-neutral-400 transition-colors hover:text-amber-400">
-              CLI Commands
+              CLI
             </Link>
           </nav>
 
-          <div className="flex items-center gap-3">
+          {/* Right Action Buttons */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/docs"
               id="header-docs-btn"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3.5 py-1.5 text-xs font-subtext font-medium text-neutral-300 transition-colors hover:border-amber-800/50 hover:bg-white/[0.06] hover:text-neutral-100"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 sm:px-3.5 py-1.5 text-xs font-subtext font-medium text-neutral-300 transition-colors hover:border-amber-800/50 hover:bg-white/[0.06] hover:text-neutral-100"
             >
               <BookOpen className="size-3.5 text-amber-400" />
               <span>Docs</span>
@@ -163,29 +233,124 @@ export default function HomePage() {
               target="_blank"
               rel="noopener noreferrer"
               id="header-github-btn"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 px-3.5 py-1.5 text-xs font-subtext font-semibold text-neutral-950 transition-all hover:bg-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.25)]"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-amber-400 px-3.5 py-1.5 text-xs font-subtext font-semibold text-neutral-950 transition-all hover:bg-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.25)]"
             >
               <span>GitHub</span>
               <ExternalLink className="size-3 text-neutral-950" />
             </a>
+
+            {/* Mobile Hamburger Toggle Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              id="mobile-menu-toggle-btn"
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileMenuOpen}
+              className="md:hidden inline-flex size-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-neutral-300 hover:text-amber-400 hover:border-amber-800/50 transition-colors"
+            >
+              {mobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer / Dropdown */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-b border-white/[0.08] bg-[#0a0d0c]/98 backdrop-blur-2xl px-5 py-6 space-y-4 animate-in fade-in slide-in-from-top-3 duration-200">
+            <nav className="flex flex-col space-y-3 font-subtext text-sm">
+              <Link
+                href="/docs/why-mayfly"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between py-2 text-neutral-300 hover:text-amber-400 border-b border-white/[0.04]"
+              >
+                <span>Why MayFly</span>
+                <ChevronRight className="size-4 text-neutral-600" />
+              </Link>
+              <Link
+                href="#use-cases"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between py-2 text-neutral-300 hover:text-amber-400 border-b border-white/[0.04]"
+              >
+                <span>Use Cases &amp; Workflows</span>
+                <ChevronRight className="size-4 text-neutral-600" />
+              </Link>
+              <Link
+                href="/docs/quickstart"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between py-2 text-neutral-300 hover:text-amber-400 border-b border-white/[0.04]"
+              >
+                <span>Quickstart (30-Sec Guide)</span>
+                <ChevronRight className="size-4 text-neutral-600" />
+              </Link>
+              <Link
+                href="/docs/concepts"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between py-2 text-neutral-300 hover:text-amber-400 border-b border-white/[0.04]"
+              >
+                <span>How It Works (Concepts)</span>
+                <ChevronRight className="size-4 text-neutral-600" />
+              </Link>
+              <Link
+                href="/docs/architecture/security-model"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between py-2 text-neutral-300 hover:text-amber-400 border-b border-white/[0.04]"
+              >
+                <span>Security &amp; Cryptography Model</span>
+                <ChevronRight className="size-4 text-neutral-600" />
+              </Link>
+              <Link
+                href="/docs/reference/zero-dependency-audit"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between py-2 text-neutral-300 hover:text-amber-400 border-b border-white/[0.04]"
+              >
+                <span>Zero-Dep Audit Proof</span>
+                <ChevronRight className="size-4 text-neutral-600" />
+              </Link>
+              <Link
+                href="/docs/cli/overview"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between py-2 text-neutral-300 hover:text-amber-400"
+              >
+                <span>CLI Reference &amp; Options</span>
+                <ChevronRight className="size-4 text-neutral-600" />
+              </Link>
+            </nav>
+
+            <div className="pt-3 border-t border-white/[0.08] flex items-center gap-3">
+              <Link
+                href="/docs"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.05] py-2.5 text-xs font-subtext font-semibold text-neutral-200 hover:bg-white/[0.1]"
+              >
+                <BookOpen className="size-4 text-amber-400" />
+                <span>Documentation</span>
+              </Link>
+              <a
+                href="https://github.com/vishnunandan555/mayfly"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-400 py-2.5 text-xs font-subtext font-semibold text-neutral-950 hover:bg-amber-300"
+              >
+                <span>GitHub</span>
+                <ExternalLink className="size-3.5 text-neutral-950" />
+              </a>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Hero Section */}
-      <main className="relative mx-auto max-w-6xl px-6 pt-12 sm:pt-16 pb-20" id="main-content">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-stretch">
+      <main className="relative mx-auto max-w-6xl px-4 sm:px-6 pt-10 sm:pt-16 pb-20" id="main-content">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-stretch">
           
-          {/* Left Column: Headline, Plain English Value Proposition, Badges, Quick Install */}
+          {/* Left Column: Headline, Value Proposition, Badges, Quick Install */}
           <section className="lg:col-span-6 flex flex-col justify-between" aria-labelledby="hero-title">
             <div>
               {/* Main Headline */}
-              <h1 id="hero-title" className="font-serif-display text-4xl sm:text-5xl lg:text-[3.35rem] font-normal tracking-tight text-neutral-100 leading-[1.1]">
+              <h1 id="hero-title" className="font-serif-display text-3xl sm:text-4xl md:text-5xl lg:text-[3.35rem] font-normal tracking-tight text-neutral-100 leading-[1.15] sm:leading-[1.1]">
                 Never store passwords in <span className="text-amber-400 italic">.env</span> files again.
               </h1>
 
-              {/* Plain English Description using Space Grotesk / font-subtext */}
-              <p className="mt-5 text-sm sm:text-base text-neutral-300 font-subtext leading-relaxed font-normal">
+              {/* Plain English Description */}
+              <p className="mt-4 sm:mt-5 text-sm sm:text-base text-neutral-300 font-subtext leading-relaxed font-normal">
                 MayFly keeps your API keys in an encrypted local vault. When you start your app (<code className="text-amber-300 font-mono text-xs font-semibold">mf npm run dev</code>), MayFly injects them straight into memory and wipes them when you finish.
               </p>
               <p className="mt-2 text-xs sm:text-sm text-neutral-400 font-subtext leading-relaxed">
@@ -193,7 +358,7 @@ export default function HomePage() {
               </p>
 
               {/* Badges Row */}
-              <div className="mt-6 flex flex-wrap items-center gap-2">
+              <div className="mt-5 sm:mt-6 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-900/60 bg-amber-950/40 px-3 py-1 font-mono text-[11px] text-amber-400">
                   <span className="size-1.5 rounded-full bg-amber-400" />
                   100% Go Standard Library
@@ -213,16 +378,16 @@ export default function HomePage() {
             {/* Bottom Install Card of Left Column */}
             <div className="mt-8 pt-6 border-t border-white/[0.08]">
               {/* Quick Install Switcher */}
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-[11px] font-semibold text-amber-400 tracking-wider">INSTALL</span>
-                  <div className="flex items-center gap-1 bg-[#131715] p-0.5 rounded-full border border-white/[0.06]" role="tablist">
+                  <div className="flex items-center gap-1 bg-[#131715] p-0.5 rounded-full border border-white/[0.06] overflow-x-auto scrollbar-none" role="tablist">
                     <button
                       onClick={() => setInstallOs('unix')}
                       id="install-unix-tab"
                       role="tab"
                       aria-selected={installOs === 'unix'}
-                      className={`rounded-full px-3 py-1 text-xs font-subtext transition-all ${
+                      className={`rounded-full px-3 py-1 text-xs font-subtext transition-all whitespace-nowrap ${
                         installOs === 'unix'
                           ? 'bg-amber-400 text-neutral-950 font-semibold shadow-sm'
                           : 'text-neutral-400 hover:text-neutral-200'
@@ -235,7 +400,7 @@ export default function HomePage() {
                       id="install-windows-tab"
                       role="tab"
                       aria-selected={installOs === 'windows'}
-                      className={`rounded-full px-3 py-1 text-xs font-subtext transition-all ${
+                      className={`rounded-full px-3 py-1 text-xs font-subtext transition-all whitespace-nowrap ${
                         installOs === 'windows'
                           ? 'bg-amber-400 text-neutral-950 font-semibold shadow-sm'
                           : 'text-neutral-400 hover:text-neutral-200'
@@ -248,7 +413,7 @@ export default function HomePage() {
                       id="install-source-tab"
                       role="tab"
                       aria-selected={installOs === 'source'}
-                      className={`rounded-full px-3 py-1 text-xs font-subtext transition-all ${
+                      className={`rounded-full px-3 py-1 text-xs font-subtext transition-all whitespace-nowrap ${
                         installOs === 'source'
                           ? 'bg-amber-400 text-neutral-950 font-semibold shadow-sm'
                           : 'text-neutral-400 hover:text-neutral-200'
@@ -264,13 +429,13 @@ export default function HomePage() {
                   href="/docs/quickstart"
                   className="hidden sm:inline-flex items-center gap-1 text-xs font-subtext font-medium text-amber-400 hover:text-amber-300 transition-colors"
                 >
-                  <span>30-Second Guide</span>
+                  <span>30-Sec Guide</span>
                   <ArrowRight className="size-3.5" />
                 </Link>
               </div>
 
               {/* Install Command Box */}
-              <div className="relative rounded-xl border border-white/[0.08] bg-[#131715] p-4 font-mono text-xs text-neutral-300">
+              <div className="relative rounded-xl border border-white/[0.08] bg-[#131715] p-3.5 sm:p-4 font-mono text-xs text-neutral-300">
                 <div className="text-[10px] text-neutral-500 mb-1.5 font-subtext uppercase tracking-wider">
                   {installOs === 'unix'
                     ? 'Works on bash, zsh, and fish (installs mayfly and mf to ~/.local/bin)'
@@ -279,13 +444,13 @@ export default function HomePage() {
                     : 'Zero external dependencies • Builds static reproducible binary'}
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <div className="truncate text-amber-200 font-medium">
+                  <div className="overflow-x-auto scrollbar-none text-amber-200 font-medium whitespace-nowrap pr-2">
                     <span className="text-neutral-600 mr-2 select-none">{installOs === 'windows' ? '>' : '$'}</span>
                     {installCommands[installOs]}
                   </div>
                   <button
                     onClick={() => copyToClipboard(installCommands[installOs], setCopiedInstall)}
-                    className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-neutral-400 hover:border-amber-800/60 hover:text-amber-300 transition-colors"
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-neutral-400 hover:border-amber-800/60 hover:text-amber-300 transition-colors active:scale-95"
                     title="Copy install command"
                     aria-label="Copy install command"
                   >
@@ -297,7 +462,7 @@ export default function HomePage() {
               {/* Platform Note */}
               <div className="mt-3 flex items-center justify-between text-xs text-neutral-500 font-subtext">
                 <span>Single ~12MB standalone binary. Gives you both <code className="text-neutral-300 font-mono">mayfly</code> and <code className="text-amber-400 font-mono font-bold">mf</code>.</span>
-                <Link href="/docs/quickstart" className="sm:hidden text-amber-400 font-medium">
+                <Link href="/docs/quickstart" className="sm:hidden text-amber-400 font-medium whitespace-nowrap ml-2">
                   Quickstart &rarr;
                 </Link>
               </div>
@@ -306,9 +471,9 @@ export default function HomePage() {
 
           {/* Right Column: Interactive Live Terminal Preview */}
           <section className="lg:col-span-6 lg:pl-2 flex flex-col" aria-label="Interactive Terminal Preview">
-            <div className="h-full rounded-2xl border border-white/[0.08] bg-[#131715] p-5 font-mono text-xs shadow-2xl ring-1 ring-amber-900/20 flex flex-col justify-between">
+            <div className="h-full rounded-2xl border border-white/[0.08] bg-[#131715] p-4 sm:p-5 font-mono text-xs shadow-2xl ring-1 ring-amber-900/20 flex flex-col justify-between">
               
-              {/* Terminal Top Bar with Clean, Non-Wrapping Tab Switcher */}
+              {/* Terminal Top Bar with Non-Wrapping Scrollable Tabs */}
               <div>
                 <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-white/[0.06] gap-2">
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -319,7 +484,7 @@ export default function HomePage() {
                   </div>
                   
                   {/* Clean Workflow Switcher Tabs */}
-                  <div className="flex items-center gap-1 bg-[#0d100f] p-0.5 rounded-lg border border-white/[0.06] overflow-x-auto" role="tablist">
+                  <div className="flex items-center gap-1 bg-[#0d100f] p-0.5 rounded-lg border border-white/[0.06] overflow-x-auto scrollbar-none max-w-full" role="tablist">
                     <button
                       onClick={() => setTerminalTab('injection')}
                       id="term-tab-injection"
@@ -377,11 +542,11 @@ export default function HomePage() {
 
                 {/* Tab 1: RAM Injection Simulation */}
                 {terminalTab === 'injection' && (
-                  <div className="space-y-3 text-left text-neutral-300 leading-relaxed min-h-[300px]">
+                  <div className="space-y-3 text-left text-neutral-300 leading-relaxed min-h-[280px]">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-amber-400 font-bold select-none">$</span>
-                        <span className="text-neutral-100 font-semibold">mf set STRIPE_SECRET=sk_live_51Msz...</span>
+                        <span className="text-neutral-100 font-semibold break-all">mf set STRIPE_SECRET=sk_live_51Msz...</span>
                       </div>
                       <div className="text-amber-400/90 text-[11px] pl-4 mt-0.5">
                         [saved] Secret STRIPE_SECRET encrypted to vault
@@ -422,13 +587,13 @@ export default function HomePage() {
 
                 {/* Tab 2: Visual TUI Dashboard Simulation */}
                 {terminalTab === 'tui' && (
-                  <div className="space-y-2 text-left text-neutral-300 leading-tight min-h-[300px]">
+                  <div className="space-y-2 text-left text-neutral-300 leading-tight min-h-[280px]">
                     <div className="flex items-center justify-between text-neutral-400 text-[11px] pb-1 border-b border-white/[0.04]">
                       <span className="text-amber-400 font-bold">MAYFLY INTERACTIVE DASHBOARD</span>
-                      <span className="text-[10px] text-neutral-500">Run &apos;mf&apos; from anywhere</span>
+                      <span className="text-[10px] text-neutral-500 hidden sm:inline">Run &apos;mf&apos; from anywhere</span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 my-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 my-2">
                       <div className="rounded border border-amber-500/60 bg-amber-950/20 p-2 text-[10px]">
                         <div className="text-amber-300 font-bold flex items-center justify-between">
                           <span>[current] my-project</span>
@@ -464,7 +629,7 @@ export default function HomePage() {
                       <span className="text-amber-400">[Enter] Open</span>
                       <span className="text-amber-400">[V] Reveal</span>
                       <span className="text-amber-400">[C] Copy</span>
-                      <span className="text-amber-400">[N] New Secret</span>
+                      <span className="text-amber-400">[N] New</span>
                       <span className="text-amber-400">[S] Scan</span>
                       <span className="text-amber-400">[Q] Exit</span>
                     </div>
@@ -473,7 +638,7 @@ export default function HomePage() {
 
                 {/* Tab 3: Plaintext Leak Scanner */}
                 {terminalTab === 'scanner' && (
-                  <div className="space-y-3 text-left text-neutral-300 leading-relaxed min-h-[300px]">
+                  <div className="space-y-3 text-left text-neutral-300 leading-relaxed min-h-[280px]">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-amber-400 font-bold select-none">$</span>
@@ -486,7 +651,7 @@ export default function HomePage() {
 
                     <div className="rounded-lg border border-red-900/40 bg-red-950/20 p-3 space-y-2 text-[11px]">
                       <div className="flex items-center gap-2 text-red-400 font-semibold">
-                        <AlertTriangle className="size-3.5" />
+                        <AlertTriangle className="size-3.5 shrink-0" />
                         <span>[CRITICAL LEAK] Unencrypted .env file found on disk</span>
                       </div>
                       <div className="pl-5 text-neutral-300 font-mono">
@@ -497,10 +662,10 @@ export default function HomePage() {
 
                     <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 space-y-1.5 text-[11px]">
                       <div className="flex items-center gap-2 text-amber-400 font-semibold">
-                        <KeyRound className="size-3.5" />
+                        <KeyRound className="size-3.5 shrink-0" />
                         <span>[WARNING] Hardcoded API key in code:</span>
                       </div>
-                      <div className="pl-5 text-neutral-300 font-mono text-[10px]">
+                      <div className="pl-5 text-neutral-300 font-mono text-[10px] break-all">
                         File: <code className="text-amber-200">src/services/api.ts:24</code> (Stripe Key pattern)
                       </div>
                     </div>
@@ -513,7 +678,7 @@ export default function HomePage() {
 
                 {/* Tab 4: Cryptographic Audit Chain */}
                 {terminalTab === 'audit' && (
-                  <div className="space-y-3 text-left text-neutral-300 leading-relaxed min-h-[300px]">
+                  <div className="space-y-3 text-left text-neutral-300 leading-relaxed min-h-[280px]">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-amber-400 font-bold select-none">$</span>
@@ -553,8 +718,8 @@ export default function HomePage() {
         </div>
 
         {/* Section 2: Quick Start Steps */}
-        <section className="mt-20 sm:mt-28" id="quickstart" aria-labelledby="quickstart-heading">
-          <div className="rounded-2xl border border-white/[0.08] bg-[#131715] p-6 sm:p-10 relative overflow-hidden">
+        <section className="mt-16 sm:mt-28" id="quickstart" aria-labelledby="quickstart-heading">
+          <div className="rounded-2xl border border-white/[0.08] bg-[#131715] p-5 sm:p-10 relative overflow-hidden">
             
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="max-w-2xl">
@@ -579,9 +744,9 @@ export default function HomePage() {
               </Link>
             </div>
 
-            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 relative">
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 relative">
               
-              <article className="flex flex-col justify-between rounded-xl border border-white/[0.06] bg-[#0d100f] p-5">
+              <article className="flex flex-col justify-between rounded-xl border border-white/[0.06] bg-[#0d100f] p-4 sm:p-5">
                 <div>
                   <div className="flex items-center gap-2.5 mb-2.5">
                     <span className="size-6 rounded-full border border-amber-500/40 bg-amber-950/40 flex items-center justify-center font-mono text-xs font-bold text-amber-400">
@@ -598,7 +763,7 @@ export default function HomePage() {
                 </div>
               </article>
 
-              <article className="flex flex-col justify-between rounded-xl border border-white/[0.06] bg-[#0d100f] p-5">
+              <article className="flex flex-col justify-between rounded-xl border border-white/[0.06] bg-[#0d100f] p-4 sm:p-5">
                 <div>
                   <div className="flex items-center gap-2.5 mb-2.5">
                     <span className="size-6 rounded-full border border-amber-500/40 bg-amber-950/40 flex items-center justify-center font-mono text-xs font-bold text-amber-400">
@@ -615,7 +780,7 @@ export default function HomePage() {
                 </div>
               </article>
 
-              <article className="flex flex-col justify-between rounded-xl border border-white/[0.06] bg-[#0d100f] p-5">
+              <article className="flex flex-col justify-between rounded-xl border border-white/[0.06] bg-[#0d100f] p-4 sm:p-5">
                 <div>
                   <div className="flex items-center gap-2.5 mb-2.5">
                     <span className="size-6 rounded-full border border-amber-500/40 bg-amber-950/40 flex items-center justify-center font-mono text-xs font-bold text-amber-400">
@@ -632,7 +797,7 @@ export default function HomePage() {
                 </div>
               </article>
 
-              <article className="flex flex-col justify-between rounded-xl border border-white/[0.06] bg-[#0d100f] p-5">
+              <article className="flex flex-col justify-between rounded-xl border border-white/[0.06] bg-[#0d100f] p-4 sm:p-5">
                 <div>
                   <div className="flex items-center gap-2.5 mb-2.5">
                     <span className="size-6 rounded-full border border-amber-500/40 bg-amber-950/40 flex items-center justify-center font-mono text-xs font-bold text-amber-400">
@@ -662,9 +827,60 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Section 3: The Supply-Chain Threat Explained Simply */}
-        <section className="mt-20 sm:mt-28" id="why-mayfly" aria-labelledby="why-heading">
-          <div className="text-center max-w-2xl mx-auto mb-10">
+        {/* Section 3: Practical Developer Use Cases */}
+        <section className="mt-16 sm:mt-28" id="use-cases" aria-labelledby="usecases-heading">
+          <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
+            <span className="font-mono text-xs font-semibold text-amber-400 tracking-wider block mb-1.5 uppercase">
+              Developer Workflows
+            </span>
+            <h2 id="usecases-heading" className="font-serif-display text-3xl sm:text-4xl font-normal text-neutral-100">
+              Built for real-world scenarios.
+            </h2>
+            <p className="mt-2 text-sm text-neutral-400 font-subtext leading-relaxed">
+              How modern engineering teams and independent developers use MayFly to secure their environments.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            {useCases.map((uc) => (
+              <article
+                key={uc.title}
+                className="group rounded-2xl border border-white/[0.08] bg-[#131715] p-5 sm:p-6 flex flex-col justify-between transition-all duration-200 hover:border-amber-900/50 hover:bg-[#161c19]"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="inline-flex size-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.02] group-hover:bg-amber-950/30 transition-colors">
+                      {uc.icon}
+                    </div>
+                    <span className="font-mono text-[10px] text-amber-400/90 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-900/40">
+                      {uc.badge}
+                    </span>
+                  </div>
+
+                  <h3 className="font-semibold text-neutral-100 text-sm mb-2 font-subtext">{uc.title}</h3>
+                  <p className="text-xs text-neutral-400 font-subtext leading-relaxed mb-4">{uc.description}</p>
+                </div>
+
+                <div className="pt-3 border-t border-white/[0.04] flex items-center justify-between gap-2">
+                  <code className="text-[11px] font-mono text-amber-300 bg-[#0d100f] px-2 py-1 rounded border border-white/[0.04] truncate">
+                    {uc.command}
+                  </code>
+                  <Link
+                    href={uc.link}
+                    className="text-neutral-400 group-hover:text-amber-400 transition-colors inline-flex items-center"
+                    aria-label={`Read guide for ${uc.title}`}
+                  >
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        {/* Section 4: The Supply-Chain Threat Explained */}
+        <section className="mt-16 sm:mt-28" id="why-mayfly" aria-labelledby="why-heading">
+          <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
             <span className="font-mono text-xs font-semibold text-amber-400 tracking-wider block mb-1.5 uppercase">
               The Security Challenge
             </span>
@@ -676,11 +892,11 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
             {/* The Plaintext Risk */}
-            <article className="rounded-2xl border border-red-950/40 bg-[#131111] p-6 sm:p-8 relative overflow-hidden">
+            <article className="rounded-2xl border border-red-950/40 bg-[#131111] p-5 sm:p-8 relative overflow-hidden">
               <div className="flex items-center gap-3 mb-5">
-                <div className="size-9 rounded-lg border border-red-900/50 bg-red-950/40 flex items-center justify-center text-red-400">
+                <div className="size-9 rounded-lg border border-red-900/50 bg-red-950/40 flex items-center justify-center text-red-400 shrink-0">
                   <AlertTriangle className="size-4.5" />
                 </div>
                 <div>
@@ -691,28 +907,28 @@ export default function HomePage() {
 
               <ul className="space-y-3 text-sm text-neutral-400 font-subtext">
                 <li className="flex items-start gap-2.5">
-                  <span className="text-red-400 font-bold select-none">[x]</span>
+                  <span className="text-red-400 font-bold select-none shrink-0">[x]</span>
                   <span><strong>Unencrypted on Disk:</strong> Passwords and API keys sit in plain text where local processes can read them.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="text-red-400 font-bold select-none">[x]</span>
+                  <span className="text-red-400 font-bold select-none shrink-0">[x]</span>
                   <span><strong>Install-Time Exfiltration:</strong> Malicious <code className="text-neutral-300 font-mono text-xs">npm postinstall</code> or Python setup scripts can scan drives and exfiltrate credentials before your app runs.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="text-red-400 font-bold select-none">[x]</span>
+                  <span className="text-red-400 font-bold select-none shrink-0">[x]</span>
                   <span><strong>Accidental Git Commits:</strong> An unintended <code className="text-neutral-300 font-mono text-xs">git add .</code> risks exposing production credentials to remote repositories.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="text-red-400 font-bold select-none">[x]</span>
+                  <span className="text-red-400 font-bold select-none shrink-0">[x]</span>
                   <span><strong>No Audit History:</strong> Traditional files provide no tamper-proof record of which process accessed secrets.</span>
                 </li>
               </ul>
             </article>
 
             {/* The MayFly Defense */}
-            <article className="rounded-2xl border border-amber-900/40 bg-[#141815] p-6 sm:p-8 relative overflow-hidden">
+            <article className="rounded-2xl border border-amber-900/40 bg-[#141815] p-5 sm:p-8 relative overflow-hidden">
               <div className="flex items-center gap-3 mb-5">
-                <div className="size-9 rounded-lg border border-amber-900/50 bg-amber-950/40 flex items-center justify-center text-amber-400">
+                <div className="size-9 rounded-lg border border-amber-900/50 bg-amber-950/40 flex items-center justify-center text-amber-400 shrink-0">
                   <Shield className="size-4.5" />
                 </div>
                 <div>
@@ -723,19 +939,19 @@ export default function HomePage() {
 
               <ul className="space-y-3 text-sm text-neutral-400 font-subtext">
                 <li className="flex items-start gap-2.5">
-                  <span className="text-amber-400 font-bold select-none">[ok]</span>
+                  <span className="text-amber-400 font-bold select-none shrink-0">[ok]</span>
                   <span><strong>Zero Files on Disk:</strong> Secrets are strictly encrypted with AES-256-GCM at rest. No plaintext file touches disk.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="text-amber-400 font-bold select-none">[ok]</span>
+                  <span className="text-amber-400 font-bold select-none shrink-0">[ok]</span>
                   <span><strong>Direct RAM Injection:</strong> Secrets reside in volatile process memory while your application is active, and memory buffers are zeroed on exit.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="text-amber-400 font-bold select-none">[ok]</span>
+                  <span className="text-amber-400 font-bold select-none shrink-0">[ok]</span>
                   <span><strong>Folder Inode Binding:</strong> Secrets are bound to your folder’s filesystem identity, preventing cross-project leaks.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="text-amber-400 font-bold select-none">[ok]</span>
+                  <span className="text-amber-400 font-bold select-none shrink-0">[ok]</span>
                   <span><strong>Tamper-Proof Audit Trail:</strong> Every secret access is signed into a cryptographic SHA-256 hash chain that cannot be altered.</span>
                 </li>
               </ul>
@@ -743,9 +959,9 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Section 4: Zero-Dependency Architecture */}
-        <section className="mt-20 sm:mt-28" id="package-killer" aria-labelledby="package-killer-heading">
-          <div className="text-center max-w-2xl mx-auto mb-10">
+        {/* Section 5: Zero-Dependency Architecture */}
+        <section className="mt-16 sm:mt-28" id="package-killer" aria-labelledby="package-killer-heading">
+          <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
             <span className="font-mono text-xs font-semibold text-amber-400 tracking-wider uppercase block mb-1.5">
               Zero-Dependency Architecture
             </span>
@@ -757,7 +973,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
             {substitutions.map((sub) => (
               <article
                 key={sub.name}
@@ -797,15 +1013,15 @@ export default function HomePage() {
             <Link
               href="/docs/reference/zero-dependency-audit"
               id="view-full-matrix-btn"
-              className="inline-flex items-center gap-2 text-xs font-mono text-amber-400 hover:text-amber-300 transition-colors"
+              className="inline-flex items-center gap-2 text-xs font-mono text-amber-400 hover:text-amber-300 transition-colors p-2"
             >
               <span>View the complete 12-entry STDLIB substitution matrix &rarr;</span>
             </Link>
           </div>
         </section>
 
-        {/* Section 5: Cryptographic Build Determinism */}
-        <section className="mt-20 sm:mt-28 rounded-2xl border border-emerald-900/40 bg-[#101713] p-8 relative overflow-hidden" id="reproducible-proof" aria-labelledby="reproducible-heading">
+        {/* Section 6: Cryptographic Build Determinism */}
+        <section className="mt-16 sm:mt-28 rounded-2xl border border-emerald-900/40 bg-[#101713] p-6 sm:p-8 relative overflow-hidden" id="reproducible-proof" aria-labelledby="reproducible-heading">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div className="max-w-xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-900/60 bg-emerald-950/40 px-3 py-1 text-xs font-mono text-emerald-300 mb-3">
@@ -823,13 +1039,13 @@ export default function HomePage() {
             <div className="w-full lg:w-auto font-mono text-xs">
               <div className="rounded-xl border border-emerald-800/40 bg-[#0d1310] p-4 space-y-2">
                 <div className="text-[10px] text-neutral-400 uppercase tracking-wider font-subtext">Published SHA-256 Binary Checksum:</div>
-                <div className="flex items-center gap-3">
-                  <span className="text-emerald-300 text-[11px] break-all font-semibold">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <span className="text-emerald-300 text-[11px] break-all font-semibold font-mono">
                     34a93967e7a8dbdadc649dbfeecde1d36b816e3627aed480c09876e8acb582ec
                   </span>
                   <button
                     onClick={() => copyToClipboard('34a93967e7a8dbdadc649dbfeecde1d36b816e3627aed480c09876e8acb582ec', setCopiedHash)}
-                    className="inline-flex size-6 shrink-0 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-neutral-400 hover:text-emerald-300"
+                    className="self-start sm:self-auto inline-flex size-7 shrink-0 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-neutral-400 hover:text-emerald-300 transition-colors"
                     title="Copy Checksum"
                     aria-label="Copy SHA-256 Checksum"
                   >
@@ -844,9 +1060,9 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Section 6: Core Features */}
-        <section className="mt-20 sm:mt-28" id="features" aria-labelledby="features-heading">
-          <div className="text-center max-w-2xl mx-auto mb-10">
+        {/* Section 7: Core Features */}
+        <section className="mt-16 sm:mt-28" id="features" aria-labelledby="features-heading">
+          <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
             <span className="font-mono text-xs font-semibold text-amber-400 tracking-wider block mb-1.5 uppercase">
               Core Capabilities
             </span>
@@ -893,7 +1109,7 @@ export default function HomePage() {
             ].map((card) => (
               <article
                 key={card.title}
-                className="group rounded-2xl border border-white/[0.06] bg-[#131715] p-6 transition-all duration-200 hover:border-amber-900/50 hover:bg-[#161c19]"
+                className="group rounded-2xl border border-white/[0.06] bg-[#131715] p-5 sm:p-6 transition-all duration-200 hover:border-amber-900/50 hover:bg-[#161c19]"
               >
                 <div className="mb-4 inline-flex size-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.02] text-amber-400 group-hover:border-amber-900/50 group-hover:bg-amber-950/30 transition-colors duration-200">
                   {card.icon}
@@ -905,9 +1121,9 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Section 7: Technical Comparison Matrix */}
-        <section className="mt-20 sm:mt-28" id="comparison" aria-labelledby="comparison-heading">
-          <div className="text-center max-w-2xl mx-auto mb-10">
+        {/* Section 8: Technical Comparison Matrix */}
+        <section className="mt-16 sm:mt-28" id="comparison" aria-labelledby="comparison-heading">
+          <div className="text-center max-w-2xl mx-auto mb-6 sm:mb-10">
             <span className="font-mono text-xs font-semibold text-amber-400 tracking-wider block mb-1.5 uppercase">
               Technical Comparison
             </span>
@@ -919,11 +1135,18 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#131715]">
-            <table className="w-full text-left text-xs font-subtext">
+          {/* Mobile Horizontal Swipe Hint */}
+          <div className="flex items-center justify-center gap-2 text-xs text-amber-400/80 mb-3 md:hidden font-subtext">
+            <span>&larr;</span>
+            <span>Swipe table horizontally to view full matrix</span>
+            <span>&rarr;</span>
+          </div>
+
+          <div className="overflow-x-auto scrollbar-none rounded-2xl border border-white/[0.08] bg-[#131715] shadow-inner">
+            <table className="w-full text-left text-xs font-subtext min-w-[620px]">
               <thead className="border-b border-white/[0.08] bg-white/[0.02] text-neutral-400 font-mono">
                 <tr>
-                  <th className="py-3.5 px-4 font-semibold text-neutral-300">Feature</th>
+                  <th className="py-3.5 px-4 font-semibold text-neutral-300 sticky left-0 bg-[#131715] z-10">Feature</th>
                   <th className="py-3.5 px-4">Plaintext .env</th>
                   <th className="py-3.5 px-4">Doppler / Infisical</th>
                   <th className="py-3.5 px-4">HashiCorp Vault</th>
@@ -932,42 +1155,42 @@ export default function HomePage() {
               </thead>
               <tbody className="divide-y divide-white/[0.04] text-neutral-300">
                 <tr>
-                  <td className="py-3.5 px-4 font-medium text-neutral-200">No Plaintext on Disk</td>
+                  <td className="py-3.5 px-4 font-medium text-neutral-200 sticky left-0 bg-[#131715] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.4)]">No Plaintext on Disk</td>
                   <td className="py-3.5 px-4 text-red-400">Plaintext on disk</td>
                   <td className="py-3.5 px-4 text-neutral-400">Downloads .env files</td>
                   <td className="py-3.5 px-4 text-neutral-400">In-memory via API</td>
                   <td className="py-3.5 px-4 text-amber-400 font-semibold bg-amber-950/20">100% In-Memory RAM</td>
                 </tr>
                 <tr>
-                  <td className="py-3.5 px-4 font-medium text-neutral-200">100% Offline Architecture</td>
+                  <td className="py-3.5 px-4 font-medium text-neutral-200 sticky left-0 bg-[#131715] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.4)]">100% Offline Architecture</td>
                   <td className="py-3.5 px-4 text-emerald-400">Offline</td>
                   <td className="py-3.5 px-4 text-red-400">Cloud SaaS dependent</td>
                   <td className="py-3.5 px-4 text-red-400">Requires daemon server</td>
                   <td className="py-3.5 px-4 text-amber-400 font-semibold bg-amber-950/20">Single Local Binary</td>
                 </tr>
                 <tr>
-                  <td className="py-3.5 px-4 font-medium text-neutral-200">Supply-Chain Attack Resilience</td>
+                  <td className="py-3.5 px-4 font-medium text-neutral-200 sticky left-0 bg-[#131715] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.4)]">Supply-Chain Attack Resilience</td>
                   <td className="py-3.5 px-4 text-red-400">Vulnerable to theft</td>
                   <td className="py-3.5 px-4 text-neutral-400">Partial</td>
                   <td className="py-3.5 px-4 text-neutral-400">Partial</td>
                   <td className="py-3.5 px-4 text-amber-400 font-semibold bg-amber-950/20">Full (No disk target)</td>
                 </tr>
                 <tr>
-                  <td className="py-3.5 px-4 font-medium text-neutral-200">Tamper-Proof Audit Log</td>
+                  <td className="py-3.5 px-4 font-medium text-neutral-200 sticky left-0 bg-[#131715] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.4)]">Tamper-Proof Audit Log</td>
                   <td className="py-3.5 px-4 text-red-400">None</td>
                   <td className="py-3.5 px-4 text-neutral-400">Cloud Web UI</td>
                   <td className="py-3.5 px-4 text-neutral-400">Server Log</td>
                   <td className="py-3.5 px-4 text-amber-400 font-semibold bg-amber-950/20">SHA-256 Hash Chain</td>
                 </tr>
                 <tr>
-                  <td className="py-3.5 px-4 font-medium text-neutral-200">Direct Process Injection</td>
+                  <td className="py-3.5 px-4 font-medium text-neutral-200 sticky left-0 bg-[#131715] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.4)]">Direct Process Injection</td>
                   <td className="py-3.5 px-4 text-neutral-400">dotenv libraries</td>
                   <td className="py-3.5 px-4 text-neutral-400">CLI exec wrapper</td>
                   <td className="py-3.5 px-4 text-neutral-400">Envconsul tool</td>
                   <td className="py-3.5 px-4 text-amber-400 font-semibold bg-amber-950/20">Built-in os/exec</td>
                 </tr>
                 <tr>
-                  <td className="py-3.5 px-4 font-medium text-neutral-200">Dependencies &amp; Overhead</td>
+                  <td className="py-3.5 px-4 font-medium text-neutral-200 sticky left-0 bg-[#131715] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.4)]">Dependencies &amp; Overhead</td>
                   <td className="py-3.5 px-4 text-neutral-400">N/A</td>
                   <td className="py-3.5 px-4 text-neutral-400">Requires SDKs</td>
                   <td className="py-3.5 px-4 text-neutral-400">150MB+ Server setup</td>
@@ -978,8 +1201,8 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Section 8: Zero-Dependency Verification CTA */}
-        <section className="mt-20 sm:mt-28 rounded-2xl border border-amber-900/40 bg-[#131715] p-8" id="audit-cta">
+        {/* Section 9: Zero-Dependency Verification CTA */}
+        <section className="mt-16 sm:mt-28 rounded-2xl border border-amber-900/40 bg-[#131715] p-6 sm:p-8" id="audit-cta">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="max-w-xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-amber-900/60 bg-amber-950/40 px-3 py-1 text-xs font-mono text-amber-400 mb-4">
@@ -998,7 +1221,7 @@ export default function HomePage() {
               <Link
                 href="/docs/reference/zero-dependency-audit"
                 id="inspect-audit-proof-btn"
-                className="inline-flex items-center gap-2 rounded-lg border border-amber-800/60 bg-amber-950/40 px-5 py-2.5 text-xs font-mono text-amber-300 hover:bg-amber-900/40 transition-colors"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg border border-amber-800/60 bg-amber-950/40 px-5 py-2.5 text-xs font-mono text-amber-300 hover:bg-amber-900/40 transition-colors"
               >
                 <span>Inspect Audit Proof</span>
                 <ChevronRight className="size-4" />
@@ -1009,12 +1232,12 @@ export default function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-white/[0.06] bg-[#0a0d0c] py-12 text-xs text-neutral-500 font-subtext" role="contentinfo">
-        <div className="mx-auto max-w-6xl px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <footer className="border-t border-white/[0.06] bg-[#0a0d0c] py-10 sm:py-12 text-xs text-neutral-500 font-subtext" role="contentinfo">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
           <div>
             MayFly &bull; Released under AGPL-3.0 &bull; Built with Pure Go Standard Library
           </div>
-          <div className="flex items-center gap-5 text-neutral-400">
+          <div className="flex flex-wrap justify-center items-center gap-4 sm:gap-5 text-neutral-400">
             <Link href="/docs" className="hover:text-amber-400 transition-colors">Documentation</Link>
             <Link href="/docs/quickstart" className="hover:text-amber-400 transition-colors">Quickstart</Link>
             <Link href="/docs/reference/zero-dependency-audit" className="hover:text-amber-400 transition-colors">Zero-Dep Audit</Link>

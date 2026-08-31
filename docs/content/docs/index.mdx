@@ -4,7 +4,7 @@ description: Zero-dependency, Go-only local secrets manager that eliminates plai
 icon: Shield
 ---
 
-import { Lightbulb, Rocket, BookOpen, ShieldCheck, Terminal, Cpu, ArrowRight } from 'lucide-react';
+import { Lightbulb, Rocket, BookOpen, ShieldCheck, Terminal, Cpu, ArrowRight, Code, ShieldAlert, GitBranch, FolderGit2, Search, WifiOff } from 'lucide-react';
 
 MayFly wraps any command in a secure execution context that injects credentials directly into child process memory, eliminating plaintext `.env` files from your code repositories. It is engineered to neutralize supply-chain credential theft during package installations (`npm install`, `pip install`, `cargo build`), CI runs, and developer workflows with a tamper-evident cryptographic audit trail.
 
@@ -35,14 +35,80 @@ mf audit verify
 | Old Vulnerable Workflow | The MayFly Secure Workflow |
 | :--- | :--- |
 | Storing `.env` or `.env.local` files on disk | Secrets encrypted at rest with AES-256-GCM in `~/.mayfly/vault.enc` |
-| `dotenv.config()` in application code | Zero code changes — standard `process.env` / `os.environ` works natively |
+| `dotenv.config()` in application code | Zero code changes: standard `process.env` / `os.environ` works natively |
 | Malicious `npm postinstall` reading `.env` | Subprocesses receive secrets only when explicitly launched |
 | No visibility into credential reads | Tamper-evident SHA-256 hash chain logs every access and run event |
 | Cloud secret manager latency and rate limits | Single 100% offline static binary with zero external dependencies |
 
 ---
 
-## Start here
+## Key Developer Use Cases
+
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose my-6">
+  <div className="docs-card rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5">
+    <div className="flex items-center gap-2 mb-2">
+      <div className="inline-flex size-7 items-center justify-center rounded-md bg-amber-950/40 border border-amber-900/50 text-amber-400">
+        <Code className="size-3.5" />
+      </div>
+      <h3 className="text-sm font-semibold text-neutral-100">Full-Stack Local Development</h3>
+    </div>
+    <p className="text-xs text-neutral-400 leading-relaxed mb-3">
+      Run Next.js, Vite, Express, Django, or FastAPI servers with <code className="text-amber-300 font-mono text-[11px]">mf npm run dev</code>. No plaintext files on disk; RAM zeroed on exit.
+    </p>
+    <a href="/docs/guides/nodejs" className="text-xs font-medium text-amber-400 hover:text-amber-300 inline-flex items-center gap-1">
+      Node.js Guide &rarr;
+    </a>
+  </div>
+
+  <div className="docs-card rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5">
+    <div className="flex items-center gap-2 mb-2">
+      <div className="inline-flex size-7 items-center justify-center rounded-md bg-red-950/40 border border-red-900/50 text-red-400">
+        <ShieldAlert className="size-3.5" />
+      </div>
+      <h3 className="text-sm font-semibold text-neutral-100">Supply-Chain Attack Defense</h3>
+    </div>
+    <p className="text-xs text-neutral-400 leading-relaxed mb-3">
+      Run <code className="text-neutral-300 font-mono text-[11px]">npm install</code> or <code className="text-neutral-300 font-mono text-[11px]">pip install</code> safely. Malicious postinstall scripts find zero secrets to steal.
+    </p>
+    <a href="/docs/why-mayfly" className="text-xs font-medium text-amber-400 hover:text-amber-300 inline-flex items-center gap-1">
+      Threat Model &rarr;
+    </a>
+  </div>
+
+  <div className="docs-card rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5">
+    <div className="flex items-center gap-2 mb-2">
+      <div className="inline-flex size-7 items-center justify-center rounded-md bg-emerald-950/40 border border-emerald-900/50 text-emerald-400">
+        <GitBranch className="size-3.5" />
+      </div>
+      <h3 className="text-sm font-semibold text-neutral-100">CI/CD &amp; Docker Builds</h3>
+    </div>
+    <p className="text-xs text-neutral-400 leading-relaxed mb-3">
+      Inject secrets into ephemeral CI test suites and Docker containers without burning credentials into layer caches or test logs.
+    </p>
+    <a href="/docs/guides/docker" className="text-xs font-medium text-amber-400 hover:text-amber-300 inline-flex items-center gap-1">
+      Docker Guide &rarr;
+    </a>
+  </div>
+
+  <div className="docs-card rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-5">
+    <div className="flex items-center gap-2 mb-2">
+      <div className="inline-flex size-7 items-center justify-center rounded-md bg-purple-950/40 border border-purple-900/50 text-purple-400">
+        <FolderGit2 className="size-3.5" />
+      </div>
+      <h3 className="text-sm font-semibold text-neutral-100">Monorepo Inode Isolation</h3>
+    </div>
+    <p className="text-xs text-neutral-400 leading-relaxed mb-3">
+      Switch between dozens of services. Filesystem inode binding ensures the right secrets automatically load per folder.
+    </p>
+    <a href="/docs/concepts" className="text-xs font-medium text-amber-400 hover:text-amber-300 inline-flex items-center gap-1">
+      Inode Architecture &rarr;
+    </a>
+  </div>
+</div>
+
+---
+
+## Start Here
 
 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 not-prose my-6">
   <a

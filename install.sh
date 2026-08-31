@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MayFly — All-in-One Global Installer, Updater, and Uninstaller
+# MayFly: All-in-One Global Installer, Updater, and Uninstaller
 # Supports Linux (all distros) and macOS (Darwin Intel & Apple Silicon)
 # Features: Tier-2 Cryptographic SHA-256 Checksum Verification & Offline Local Builds
 
@@ -115,9 +115,9 @@ esac
 
 echo "================================================="
 if [ "$UPDATE" = true ]; then
-    echo "  MayFly — Updating to ${VERSION}"
+    echo "  MayFly: Updating to ${VERSION}"
 else
-    echo "  MayFly — Zero-Dependency Secrets Workspace"
+    echo "  MayFly: Zero-Dependency Secrets Workspace"
     echo "  Secure Installation & Supply-Chain Verifier"
 fi
 echo "================================================="
@@ -130,7 +130,7 @@ echo ""
 
 # Prompt for command alias selection
 echo "Choose command alias to install:"
-echo "  [1] Both 'mayfly' and 'mf' (Recommended — press Enter)"
+echo "  [1] Both 'mayfly' and 'mf' (Recommended: press Enter)"
 echo "  [2] Only 'mayfly'"
 echo "  [3] Only 'mf'"
 echo ""

@@ -1,4 +1,4 @@
-# MayFly — Standard Library Substitution Matrix (STDLIB.md)
+# MayFly: Standard Library Substitution Matrix (STDLIB.md)
 
 MayFly is built entirely with the **Go standard library (100% zero third-party dependencies)**. This document catalogs the non-trivial standard library substitutions implemented from first principles to replace widely installed external packages.
 

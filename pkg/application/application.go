@@ -1,12 +1,9 @@
 package application
 
 import (
-	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +27,7 @@ var (
 	ErrAuditFailed         = audit.ErrAuditFailed
 )
 
+// Dependencies holds the external subsystem instances required by Service.
 type Dependencies struct {
 	Projects *project.Registry
 	Vault    *vault.Storage
@@ -38,7 +36,7 @@ type Dependencies struct {
 	Scanner  *scanner.Scanner
 }
 
-// Service is the main orchestration layer.
+// Service orchestrates secrets storage, project resolution, and in-memory process execution.
 type Service struct {
 	mu               sync.RWMutex
 	projects         *project.Registry
@@ -53,6 +51,7 @@ type Service struct {
 	autoLockTimer    *time.Timer
 }
 
+// NewService constructs a new application service instance with a default 15-minute auto-lock timeout.
 func NewService(deps Dependencies) *Service {
 	return &Service{
 		projects:         deps.Projects,
@@ -64,7 +63,7 @@ func NewService(deps Dependencies) *Service {
 	}
 }
 
-// SetAutoLockTimeout configures the vault auto-lock idle timeout.
+// SetAutoLockTimeout configures the vault auto-lock idle timeout duration.
 func (s *Service) SetAutoLockTimeout(d time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -84,6 +83,7 @@ func (s *Service) resetAutoLockLocked() {
 	}
 }
 
+// VaultExists checks whether the encrypted vault storage file exists on disk.
 func (s *Service) VaultExists() bool {
 	if s.vault == nil {
 		return false
@@ -91,13 +91,14 @@ func (s *Service) VaultExists() bool {
 	return s.vault.Exists()
 }
 
+// IsUnlocked returns true if the master password has been verified and the vault is held in memory.
 func (s *Service) IsUnlocked() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.isUnlocked
 }
 
-// InitializeVault creates a new encrypted vault with master password.
+// InitializeVault creates a new encrypted vault container with the provided master password.
 func (s *Service) InitializeVault(ctx context.Context, password []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -127,7 +128,7 @@ func (s *Service) InitializeVault(ctx context.Context, password []byte) error {
 	return nil
 }
 
-// UnlockVault decrypts the vault into memory.
+// UnlockVault decrypts the vault storage into active volatile memory using the master password.
 func (s *Service) UnlockVault(ctx context.Context, password []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -153,7 +154,7 @@ func (s *Service) UnlockVault(ctx context.Context, password []byte) error {
 	return nil
 }
 
-// LockVault zeroes out memory buffers and locks the vault.
+// LockVault zeroes out decrypted memory buffers and locks the vault.
 func (s *Service) LockVault() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -172,318 +173,7 @@ func (s *Service) LockVault() {
 	s.isUnlocked = false
 }
 
-// Projects returns all registered projects.
-func (s *Service) Projects() ([]domain.Project, error) {
-	if s.projects == nil {
-		return nil, ErrProjectNotFound
-	}
-	return s.projects.List()
-}
-
-// ResolveCurrentProject identifies the project in the current working directory.
-func (s *Service) ResolveCurrentProject(dir string) (domain.Project, error) {
-	if s.projects == nil {
-		return domain.Project{}, ErrProjectNotFound
-	}
-	return s.projects.Resolve(dir)
-}
-
-// RegisterProject registers a new project folder.
-func (s *Service) RegisterProject(ctx context.Context, dir string) (domain.Project, error) {
-	if s.projects == nil {
-		return domain.Project{}, ErrProjectNotFound
-	}
-	proj, err := s.projects.Register(dir)
-	if err != nil {
-		return domain.Project{}, err
-	}
-
-	if s.auditor != nil {
-		_ = s.auditor.Record(ctx, domain.ActionProjectInit, proj.ID, "", "", nil)
-	}
-
-	return proj, nil
-}
-
-// DeleteProject unregisters a project and removes its secrets.
-func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.projects != nil {
-		if err := s.projects.Delete(projectID); err != nil {
-			return err
-		}
-	}
-
-	if s.isUnlocked && s.vault != nil {
-		delete(s.activeSecret.Projects, projectID)
-		if err := s.vault.Save(s.activeSecret, s.password); err != nil {
-			return err
-		}
-	}
-
-	if s.auditor != nil {
-		_ = s.auditor.Record(ctx, domain.ActionProjectDeleted, projectID, "", "", nil)
-	}
-
-	return nil
-}
-
-// MigrateProject updates project paths when a directory moves.
-func (s *Service) MigrateProject(ctx context.Context, oldDir, newDir string) (domain.Project, domain.Project, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.projects == nil {
-		return domain.Project{}, domain.Project{}, ErrProjectNotFound
-	}
-
-	oldProj, newProj, err := s.projects.MigrateProject(oldDir, newDir)
-	if err != nil {
-		return domain.Project{}, domain.Project{}, err
-	}
-
-	// Migrate secrets map key
-	if s.isUnlocked && s.vault != nil {
-		if secrets, ok := s.activeSecret.Projects[oldProj.ID]; ok {
-			s.activeSecret.Projects[newProj.ID] = secrets
-			delete(s.activeSecret.Projects, oldProj.ID)
-			_ = s.vault.Save(s.activeSecret, s.password)
-		}
-	}
-
-	if s.auditor != nil {
-		_ = s.auditor.Record(ctx, domain.ActionProjectMigrated, newProj.ID, "", fmt.Sprintf("%s -> %s", oldDir, newDir), nil)
-	}
-
-	return oldProj, newProj, nil
-}
-
-// ListSecrets returns secret keys for a project.
-func (s *Service) ListSecrets(projectID string) ([]domain.Secret, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if !s.isUnlocked {
-		return nil, ErrVaultLocked
-	}
-
-	projMap, ok := s.activeSecret.Projects[projectID]
-	if !ok {
-		return []domain.Secret{}, nil
-	}
-
-	var list []domain.Secret
-	for k, v := range projMap {
-		list = append(list, domain.Secret{
-			Name:  k,
-			Value: v,
-		})
-	}
-	return list, nil
-}
-
-// GetSecret retrieves a single secret value.
-func (s *Service) GetSecret(ctx context.Context, projectID string, name domain.SecretName) (string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if !s.isUnlocked {
-		return "", ErrVaultLocked
-	}
-
-	projMap, ok := s.activeSecret.Projects[projectID]
-	if !ok {
-		return "", ErrSecretNotFound
-	}
-
-	val, found := projMap[name]
-	if !found {
-		return "", ErrSecretNotFound
-	}
-
-	if s.auditor != nil {
-		_ = s.auditor.Record(ctx, domain.ActionSecretGet, projectID, string(name), "", nil)
-	}
-
-	return val, nil
-}
-
-// SetSecret adds or updates a secret in the encrypted vault.
-func (s *Service) SetSecret(ctx context.Context, projectID string, name domain.SecretName, value string) error {
-	if err := name.Validate(); err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if !s.isUnlocked {
-		return ErrVaultLocked
-	}
-
-	if s.activeSecret.Projects == nil {
-		s.activeSecret.Projects = make(map[string]map[domain.SecretName]string)
-	}
-
-	if _, ok := s.activeSecret.Projects[projectID]; !ok {
-		s.activeSecret.Projects[projectID] = make(map[domain.SecretName]string)
-	}
-
-	s.activeSecret.Projects[projectID][name] = value
-
-	if err := s.vault.Save(s.activeSecret, s.password); err != nil {
-		return err
-	}
-
-	s.resetAutoLockLocked()
-
-	if s.auditor != nil {
-		_ = s.auditor.Record(ctx, domain.ActionSecretSet, projectID, string(name), "", nil)
-	}
-
-	return nil
-}
-
-// DeleteSecret removes a secret from the vault.
-func (s *Service) DeleteSecret(ctx context.Context, projectID string, name domain.SecretName) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if !s.isUnlocked {
-		return ErrVaultLocked
-	}
-
-	projMap, ok := s.activeSecret.Projects[projectID]
-	if !ok {
-		return ErrSecretNotFound
-	}
-
-	if _, found := projMap[name]; !found {
-		return ErrSecretNotFound
-	}
-
-	delete(projMap, name)
-	if err := s.vault.Save(s.activeSecret, s.password); err != nil {
-		return err
-	}
-
-	s.resetAutoLockLocked()
-
-	if s.auditor != nil {
-		_ = s.auditor.Record(ctx, domain.ActionSecretDeleted, projectID, string(name), "", nil)
-	}
-
-	return nil
-}
-
-// RotatePassword changes the master password of the encrypted vault and re-encrypts all data with a new salt.
-func (s *Service) RotatePassword(ctx context.Context, oldPassword, newPassword []byte) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.vault == nil {
-		return ErrMissingVaultStorage
-	}
-
-	if len(newPassword) == 0 {
-		return errors.New("application: new password cannot be empty")
-	}
-
-	// Verify old password
-	record, err := s.vault.Open(oldPassword)
-	if err != nil {
-		return err
-	}
-
-	newPassCopy := append([]byte(nil), newPassword...)
-	if err := s.vault.Save(record, newPassCopy); err != nil {
-		return err
-	}
-
-	for i := range s.password {
-		s.password[i] = 0
-	}
-	runtime.KeepAlive(s.password)
-
-	s.activeSecret = record
-	s.password = newPassCopy
-	s.isUnlocked = true
-	s.resetAutoLockLocked()
-
-	if s.auditor != nil {
-		_ = s.auditor.Record(ctx, domain.ActionVaultPasswordRotated, "", "", "", nil)
-	}
-
-	return nil
-}
-
-// ImportEnv parses .env formatted content and sets secrets for the given project.
-func (s *Service) ImportEnv(ctx context.Context, projectID string, content string) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if !s.isUnlocked {
-		return 0, ErrVaultLocked
-	}
-
-	if s.activeSecret.Projects == nil {
-		s.activeSecret.Projects = make(map[string]map[domain.SecretName]string)
-	}
-	if _, ok := s.activeSecret.Projects[projectID]; !ok {
-		s.activeSecret.Projects[projectID] = make(map[domain.SecretName]string)
-	}
-
-	scanner := bufio.NewScanner(strings.NewReader(content))
-	count := 0
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		line = strings.TrimPrefix(line, "export ")
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(parts[0])
-		val := strings.TrimSpace(parts[1])
-
-		// Strip quotes
-		if (strings.HasPrefix(val, "\"") && strings.HasSuffix(val, "\"")) ||
-			(strings.HasPrefix(val, "'") && strings.HasSuffix(val, "'")) {
-			if len(val) >= 2 {
-				val = val[1 : len(val)-1]
-			}
-		}
-
-		secName := domain.SecretName(key)
-		if err := secName.Validate(); err != nil {
-			continue
-		}
-
-		s.activeSecret.Projects[projectID][secName] = val
-		count++
-	}
-
-	if count > 0 {
-		if err := s.vault.Save(s.activeSecret, s.password); err != nil {
-			return 0, err
-		}
-		if s.auditor != nil {
-			_ = s.auditor.Record(ctx, domain.ActionSecretImported, projectID, fmt.Sprintf("%d secrets", count), "", nil)
-		}
-	}
-
-	s.resetAutoLockLocked()
-	return count, nil
-}
-
-// Run executes a command with in-memory secret injection.
+// Run launches a target command with decrypted project secrets injected directly into volatile RAM.
 func (s *Service) Run(ctx context.Context, req domain.ExecutionRequest) (domain.ExecutionResult, error) {
 	s.mu.RLock()
 	if !s.isUnlocked {
@@ -510,7 +200,7 @@ func (s *Service) Run(ctx context.Context, req domain.ExecutionRequest) (domain.
 	return res, err
 }
 
-// Scan scans a directory for plaintext credential exposures.
+// Scan crawls a directory to detect unencrypted plaintext credential leaks and hardcoded keys.
 func (s *Service) Scan(ctx context.Context, dir string) ([]domain.ScanFinding, error) {
 	if s.scanner == nil {
 		var err error
@@ -527,7 +217,7 @@ func (s *Service) Scan(ctx context.Context, dir string) ([]domain.ScanFinding, e
 	return findings, err
 }
 
-// AuditTrail returns chronological access logs.
+// AuditTrail returns chronological access logs from the cryptographic audit log.
 func (s *Service) AuditTrail(ctx context.Context) ([]domain.AuditEvent, error) {
 	if s.auditor == nil {
 		return nil, nil
@@ -535,62 +225,10 @@ func (s *Service) AuditTrail(ctx context.Context) ([]domain.AuditEvent, error) {
 	return s.auditor.Events(ctx)
 }
 
-// VerifyAudit verifies the SHA-256 hash chain of the audit log.
+// VerifyAudit verifies the SHA-256 Merkle-style hash chain of the audit log file.
 func (s *Service) VerifyAudit(ctx context.Context) error {
 	if s.auditor == nil {
 		return nil
 	}
 	return s.auditor.Verify(ctx)
-}
-
-// ExportBackup creates an encrypted backup snapshot.
-func (s *Service) ExportBackup(ctx context.Context, targetFile string) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.vault == nil {
-		return ErrMissingVaultStorage
-	}
-
-	projects, err := s.projects.AllMap()
-	if err != nil {
-		return err
-	}
-
-	if err := s.vault.ExportSnapshot(targetFile, projects); err != nil {
-		return err
-	}
-
-	if s.auditor != nil {
-		_ = s.auditor.Record(ctx, domain.ActionBackupCreated, "", "", targetFile, nil)
-	}
-
-	return nil
-}
-
-// RestoreBackup imports an encrypted backup snapshot.
-func (s *Service) RestoreBackup(ctx context.Context, snapshotFile string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.vault == nil {
-		return ErrMissingVaultStorage
-	}
-
-	projects, err := s.vault.ImportSnapshot(snapshotFile)
-	if err != nil {
-		return err
-	}
-
-	if s.projects != nil {
-		if err := s.projects.ImportMap(projects); err != nil {
-			return err
-		}
-	}
-
-	if s.auditor != nil {
-		_ = s.auditor.Record(ctx, domain.ActionBackupRestored, "", "", snapshotFile, nil)
-	}
-
-	return nil
 }

@@ -127,6 +127,25 @@ mf migrate <OLD_PATH> <NEW_PATH>
 
 ---
 
+## mf completion
+
+Generate shell autocompletion scripts for your interactive shell environment (`bash`, `zsh`, or `fish`).
+
+```bash
+# Bash completion
+mf completion bash > /etc/bash_completion.d/mayfly
+# or in ~/.bashrc:
+source <(mf completion bash)
+
+# Zsh completion
+mf completion zsh > "${fpath[1]}/_mayfly"
+
+# Fish completion
+mf completion fish > ~/.config/fish/completions/mayfly.fish
+```
+
+---
+
 ## mf uninstall
 
 Cleanly remove `mayfly` and `mf` binaries, remove PATH exports from shell configuration files, and wipe all local vault data.

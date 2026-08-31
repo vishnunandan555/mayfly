@@ -68,15 +68,15 @@ Run `mayfly` or `mf` from **any folder** to open the interactive dashboard:
 - **Secret Drilldown:** Press **`Enter`** on any project to drill down into its secrets list (values masked with `••••••••`).
 - **Clipboard Copy:** Press **`C`** on any secret to copy its raw value to your system clipboard.
 - **Key Shortcuts:**
-  - `Enter` — Open project / Edit secret
-  - `N` — New secret / Initialize directory
-  - `C` — Copy secret value to clipboard
-  - `V` — Reveal / Mask value
-  - `D` — Delete secret
-  - `S` — Plaintext leak scanner
-  - `A` — Tamper-evident audit trail
-  - `B` — Export encrypted backup
-  - `Q` / `Esc` — Back / Exit
+  - `Enter`: Open project / Edit secret
+  - `N`: New secret / Initialize directory
+  - `C`: Copy secret value to clipboard
+  - `V`: Reveal / Mask value
+  - `D`: Delete secret
+  - `S`: Plaintext leak scanner
+  - `A`: Tamper-evident audit trail
+  - `B`: Export encrypted backup
+  - `Q` / `Esc`: Back / Exit
 
 ### 2. Current Project Scoped TUI (`mayfly c` or `mf c`)
 From inside any project directory:

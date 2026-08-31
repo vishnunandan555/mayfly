@@ -1,0 +1,17 @@
+# MayFly: Zero-Disk Secrets Manager & In-Memory Process Injector
+> Never store passwords or API keys in plaintext .env files again. MayFly encrypts credentials locally with AES-256-GCM + PBKDF2 and injects them directly into child process volatile RAM with 0 external dependencies.
+
+## Documentation Index
+- [Introduction](https://mayfly.dev/docs): Overview of MayFly, principles, and comparison.
+- [Why MayFly](https://mayfly.dev/docs/why-mayfly): The supply chain threat model of .env files and npm/pip postinstall exfiltration.
+- [Quickstart](https://mayfly.dev/docs/quickstart): 2-minute guide to installing, initializing vault, storing secrets, and running apps.
+- [Concepts](https://mayfly.dev/docs/concepts): Inode isolation, in-memory process execution, cryptographic audit hash chains.
+- [Security Model](https://mayfly.dev/docs/architecture/security-model): PBKDF2-HMAC-SHA256 (600k rounds), AES-256-GCM AEAD, memory zeroing.
+- [In-Memory Injection](https://mayfly.dev/docs/architecture/in-memory-injection): How OS exec primitives avoid disk writes.
+- [Audit Chain](https://mayfly.dev/docs/architecture/audit-chain): SHA-256 linked cryptographic audit log.
+- [CLI Reference](https://mayfly.dev/docs/cli/overview): All CLI commands (`mf`, `mf set`, `mf get`, `mf run`, `mf scan`, `mf audit`).
+- [Zero-Dependency Audit](https://mayfly.dev/docs/reference/zero-dependency-audit): Stdlib substitution matrix and proof.
+- [Node.js & Next.js Guide](https://mayfly.dev/docs/guides/nodejs): Using MayFly with Node.js and Next.js.
+- [Python Guide](https://mayfly.dev/docs/guides/python): Using MayFly with Python (FastAPI, Django, Flask).
+- [Docker Guide](https://mayfly.dev/docs/guides/docker): Using MayFly in containers.
+- [Troubleshooting](https://mayfly.dev/docs/guides/troubleshooting): Resolving common errors and questions.

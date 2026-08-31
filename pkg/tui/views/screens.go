@@ -31,6 +31,7 @@ const (
 	ModeDeleteProjectPassword
 )
 
+// Screens coordinates the interactive terminal user interface views and modals.
 type Screens struct {
 	svc             *application.Service
 	mode            ScreenMode
@@ -66,6 +67,7 @@ type Screens struct {
 	deleteProjName  string
 }
 
+// NewScreens initializes all screen widgets and determines the initial display mode.
 func NewScreens(svc *application.Service, currentDir string) *Screens {
 	s := &Screens{
 		svc:             svc,
@@ -100,17 +102,20 @@ func NewScreens(svc *application.Service, currentDir string) *Screens {
 	return s
 }
 
+// SetProjectScoped focuses the TUI directly on a specific project workspace.
 func (s *Screens) SetProjectScoped(proj domain.Project) {
 	s.selProject = proj
 	s.mode = ModeProjectSecrets
 	s.reloadSecrets()
 }
 
+// SetStatus displays a temporary status message in the status bar.
 func (s *Screens) SetStatus(msg string) {
 	s.status = msg
 	s.statusTimer = time.Now()
 }
 
+// Tick handles periodic timer updates such as 10-second secret auto-masking.
 func (s *Screens) Tick() {
 	if s.revealValue && !s.revealTimer.IsZero() {
 		elapsed := time.Since(s.revealTimer)
@@ -126,67 +131,6 @@ func (s *Screens) Tick() {
 	} else if !s.statusTimer.IsZero() && time.Since(s.statusTimer) > 4*time.Second && !s.revealValue {
 		s.status = ""
 	}
-}
-
-func (s *Screens) reloadProjects() {
-	projects, err := s.svc.Projects()
-	if err != nil {
-		s.SetStatus(fmt.Sprintf("Failed to load projects: %v", err))
-		return
-	}
-
-	var currentProjID string
-	if cur, err := s.svc.ResolveCurrentProject(s.currentDir); err == nil {
-		currentProjID = cur.ID
-	}
-
-	var cards []widget.ProjectCard
-	for _, p := range projects {
-		secCount := 0
-		if s.svc.IsUnlocked() {
-			if list, err := s.svc.ListSecrets(p.ID); err == nil {
-				secCount = len(list)
-			}
-		}
-		cards = append(cards, widget.ProjectCard{
-			Project:     p,
-			SecretCount: secCount,
-			IsCurrent:   p.ID == currentProjID,
-		})
-	}
-
-	s.projectGrid.SetCards(cards)
-}
-
-func (s *Screens) reloadSecrets() {
-	if s.selProject.ID == "" {
-		return
-	}
-
-	list, err := s.svc.ListSecrets(s.selProject.ID)
-	if err != nil {
-		s.SetStatus(fmt.Sprintf("Error: %v", err))
-		return
-	}
-	s.secrets = list
-
-	var items []widget.ListItem
-	for _, sec := range list {
-		maskedVal := "••••••••••••••••"
-		if s.revealValue {
-			maskedVal = sec.Value
-		}
-		items = append(items, widget.ListItem{
-			Primary:   string(sec.Name),
-			Secondary: maskedVal,
-			Extra:     "[C: Copy]",
-			Data:      sec,
-		})
-	}
-
-	projName := filepath.Base(s.selProject.CanonicalPath)
-	s.secretsList.Title = fmt.Sprintf("Secrets for: %s", projName)
-	s.secretsList.SetItems(items)
 }
 
 // HandleKey processes keyboard input and transitions between screens.
@@ -236,7 +180,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 			return false
 		}
 		if event.Type == terminal.KeyEscape {
-			return true // Exit
+			return true
 		}
 		if s.passInput.Focused {
 			s.passInput.HandleKey(event)
@@ -262,14 +206,14 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 			return false
 		}
 		if event.Type == terminal.KeyEscape {
-			return true // Exit
+			return true
 		}
 		s.passInput.HandleKey(event)
 
 	case ModeGlobalProjects:
 		switch event.Type {
 		case terminal.KeyEscape:
-			return true // Exit TUI
+			return true
 		case terminal.KeyEnter:
 			selected := s.projectGrid.SelectedCard()
 			if selected != nil {
@@ -282,14 +226,14 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 			switch event.Rune {
 			case 'q', 'Q':
 				return true
-			case 'n', 'N': // Open initialize project dialog
+			case 'n', 'N':
 				s.mode = ModeInitProject
 				s.initChoice = 0
 				s.customInitPath.Clear()
 				s.customInitPath.SetFocused(false)
 				s.SetStatus("Select initialization target: [1] Current Directory or [2] Custom Path")
 				return false
-			case 'd', 'D': // Delete selected project vault
+			case 'd', 'D':
 				selected := s.projectGrid.SelectedCard()
 				if selected == nil {
 					s.SetStatus("Please select a project card first (use arrow keys).")
@@ -306,17 +250,17 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 				s.confirmDlg.Active = true
 				s.mode = ModeDeleteProjectConfirm
 				return false
-			case 's', 'S': // Scanner
+			case 's', 'S':
 				s.prevMode = s.mode
 				s.mode = ModeScan
 				s.runScan()
 				return false
-			case 'a', 'A': // Audit Log
+			case 'a', 'A':
 				s.prevMode = s.mode
 				s.mode = ModeAudit
 				s.loadAudit()
 				return false
-			case 'b', 'B': // Backup
+			case 'b', 'B':
 				s.prevMode = s.mode
 				s.mode = ModeBackup
 				s.backupPath.SetValue(filepath.Join(s.currentDir, "mayfly-backup.json"))
@@ -332,7 +276,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 			s.mode = ModeGlobalProjects
 			s.reloadProjects()
 			return false
-		case terminal.KeyEnter: // Edit secret
+		case terminal.KeyEnter:
 			sel := s.secretsList.SelectedItem()
 			if sel != nil {
 				sec := sel.Data.(domain.Secret)
@@ -350,7 +294,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 				s.mode = ModeGlobalProjects
 				s.reloadProjects()
 				return false
-			case 'c', 'C': // Copy to clipboard
+			case 'c', 'C':
 				sel := s.secretsList.SelectedItem()
 				if sel != nil {
 					sec := sel.Data.(domain.Secret)
@@ -358,7 +302,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 					s.SetStatus(fmt.Sprintf("[OK] Copied '%s' to clipboard", sec.Name))
 				}
 				return false
-			case 'v', 'V': // Toggle reveal with 10s auto-hide countdown
+			case 'v', 'V':
 				s.revealValue = !s.revealValue
 				if s.revealValue {
 					s.revealTimer = time.Now()
@@ -369,7 +313,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 				}
 				s.reloadSecrets()
 				return false
-			case 'n', 'N': // Add new secret
+			case 'n', 'N':
 				s.editOrigName = ""
 				s.secretName.Clear()
 				s.secretValue.Clear()
@@ -377,7 +321,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 				s.secretValue.Focused = false
 				s.mode = ModeEditSecret
 				return false
-			case 'd', 'D': // Delete secret
+			case 'd', 'D':
 				sel := s.secretsList.SelectedItem()
 				if sel != nil {
 					sec := sel.Data.(domain.Secret)
@@ -592,59 +536,12 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 	return false
 }
 
-func (s *Screens) runScan() {
-	ctx := context.Background()
-	dir := s.currentDir
-	if s.selProject.CanonicalPath != "" {
-		dir = s.selProject.CanonicalPath
-	}
-
-	findings, err := s.svc.Scan(ctx, dir)
-	if err != nil {
-		s.SetStatus(fmt.Sprintf("Scan error: %v", err))
-		return
-	}
-
-	var items []widget.ListItem
-	for _, f := range findings {
-		items = append(items, widget.ListItem{
-			Primary:   fmt.Sprintf("[%s] %s:%d", f.Severity, f.Path, f.Line),
-			Secondary: f.Message,
-		})
-	}
-
-	s.scanList.SetItems(items)
-	if len(findings) == 0 {
-		s.SetStatus("[OK] No plaintext credential leaks detected.")
-	}
-}
-
-func (s *Screens) loadAudit() {
-	ctx := context.Background()
-	events, err := s.svc.AuditTrail(ctx)
-	if err != nil {
-		s.SetStatus(fmt.Sprintf("Audit error: %v", err))
-		return
-	}
-
-	var items []widget.ListItem
-	for i := len(events) - 1; i >= 0; i-- { // Most recent first
-		ev := events[i]
-		items = append(items, widget.ListItem{
-			Primary:   fmt.Sprintf("#%d %s", ev.Sequence, ev.Action),
-			Secondary: ev.At.Format("15:04:05") + " " + ev.Secret + " " + ev.Command,
-			Extra:     ev.Hash[:8] + "...",
-		})
-	}
-	s.auditList.SetItems(items)
-}
-
-// Draw renders the active screen layout onto the frame.
+// Draw renders the current view or active modal dialog onto the frame.
 func (s *Screens) Draw(frame *terminal.Frame) {
 	bounds := frame.Bounds()
 	frame.Clear(terminal.Style{})
 
-	// Layout: Header (3 rows), Body (Flexible), Status (1 row), Footer (1 row)
+	// Layout: Header (3 rows), Body (Flexible), Status/Footer (1 row)
 	split := layout.Split(layout.DirVertical, bounds, []layout.Constraint{
 		layout.Fixed(3),
 		layout.Flexible(),
@@ -655,142 +552,37 @@ func (s *Screens) Draw(frame *terminal.Frame) {
 	bodyRect := split[1]
 	footerRect := split[2]
 
-	// Draw Header
-	frame.DrawBox(headerRect, terminal.Style{Foreground: terminal.ColorBrightCyan}, fmt.Sprintf("MayFly v%s — Zero-Dependency Secrets Workspace", domain.Version))
+	// Draw Header bar
+	frame.DrawBox(headerRect, terminal.Style{Foreground: terminal.ColorBrightCyan}, fmt.Sprintf("MayFly v%s: Zero-Dependency Secrets Workspace", domain.Version))
 	headerText := "Secure RAM Environment Injection · AES-256-GCM Vault"
 	frame.DrawText(headerRect.Min.Row+1, headerRect.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightWhite}, headerText)
 
-	// Draw Body based on Mode
+	// Draw Body based on active mode
 	switch s.mode {
 	case ModeFirstRunSetup:
-		inputRects := layout.Split(layout.DirVertical, bodyRect, []layout.Constraint{
-			layout.Fixed(1),
-			layout.Fixed(1),
-			layout.Fixed(3),
-			layout.Fixed(1),
-			layout.Fixed(3),
-			layout.Flexible(),
-		})
-		frame.DrawText(inputRects[0].Min.Row, inputRects[0].Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightYellow, Attributes: terminal.AttrBold}, "FIRST-TIME SETUP: CREATE VAULT MASTER PASSWORD")
-		frame.DrawText(inputRects[1].Min.Row, inputRects[1].Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightBlack, Attributes: terminal.AttrDim}, "Choose a password to encrypt your local secrets vault (~/.mayfly/vault.enc)")
-		s.passInput.Draw(frame, inputRects[2])
-		s.confirmPass.Draw(frame, inputRects[4])
-
+		s.drawFirstRunSetup(frame, bodyRect)
 	case ModeUnlock:
-		inputRects := layout.Split(layout.DirVertical, bodyRect, []layout.Constraint{
-			layout.Fixed(3),
-			layout.Fixed(3),
-			layout.Flexible(),
-		})
-		s.passInput.Draw(frame, inputRects[1])
-
+		s.drawUnlock(frame, bodyRect)
 	case ModeGlobalProjects:
-		s.projectGrid.Draw(frame, bodyRect)
-
+		s.drawDashboard(frame, bodyRect)
 	case ModeProjectSecrets:
-		s.secretsList.Draw(frame, bodyRect)
-
+		s.drawProjectDetail(frame, bodyRect)
 	case ModeEditSecret:
-		inputRects := layout.Split(layout.DirVertical, bodyRect, []layout.Constraint{
-			layout.Fixed(2),
-			layout.Fixed(3),
-			layout.Fixed(1),
-			layout.Fixed(3),
-			layout.Flexible(),
-		})
-		title := "ADD NEW SECRET"
-		if s.editOrigName != "" {
-			title = fmt.Sprintf("EDIT SECRET '%s'", s.editOrigName)
-		}
-		frame.DrawText(inputRects[0].Min.Row+1, inputRects[0].Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightCyan, Attributes: terminal.AttrBold}, title)
-		s.secretName.Draw(frame, inputRects[1])
-		s.secretValue.Draw(frame, inputRects[3])
-
+		s.drawEditSecret(frame, bodyRect)
 	case ModeDeleteConfirm:
-		s.secretsList.Draw(frame, bodyRect)
-		s.confirmDlg.Draw(frame, bodyRect)
-
+		s.drawDeleteConfirm(frame, bodyRect)
 	case ModeScan:
-		s.scanList.Draw(frame, bodyRect)
-
+		s.drawScan(frame, bodyRect)
 	case ModeAudit:
-		s.auditList.Draw(frame, bodyRect)
-
+		s.drawAudit(frame, bodyRect)
 	case ModeBackup:
-		inputRects := layout.Split(layout.DirVertical, bodyRect, []layout.Constraint{
-			layout.Fixed(2),
-			layout.Fixed(3),
-			layout.Flexible(),
-		})
-		frame.DrawText(inputRects[0].Min.Row+1, inputRects[0].Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightCyan, Attributes: terminal.AttrBold}, "EXPORT ENCRYPTED VAULT BACKUP")
-		s.backupPath.Draw(frame, inputRects[1])
-
+		s.drawBackup(frame, bodyRect)
 	case ModeInitProject:
-		s.projectGrid.Draw(frame, bodyRect)
-		dialogWidth := 64
-		if dialogWidth > bounds.Max.Column-bounds.Min.Column-6 {
-			dialogWidth = bounds.Max.Column - bounds.Min.Column - 6
-		}
-		dialogHeight := 13
-		dialogTop := bodyRect.Min.Row + (bodyRect.Max.Row-bodyRect.Min.Row-dialogHeight)/2
-		dialogLeft := bodyRect.Min.Column + (bodyRect.Max.Column-bodyRect.Min.Column-dialogWidth)/2
-		dialogRect := terminal.NewRect(dialogTop, dialogLeft, dialogHeight, dialogWidth)
-
-		// Fill inside of modal so background grid doesn't bleed through
-		frame.FillRect(dialogRect, ' ', terminal.Style{})
-		frame.DrawBox(dialogRect, terminal.Style{Foreground: terminal.ColorBrightCyan, Attributes: terminal.AttrBold}, "INITIALIZE NEW PROJECT VAULT")
-		frame.DrawText(dialogRect.Min.Row+2, dialogRect.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightWhite}, "Select directory to initialize with MayFly:")
-
-		opt1Style := terminal.Style{Foreground: terminal.ColorBrightWhite}
-		opt1Prefix := "  [1] "
-		if s.initChoice == 0 {
-			opt1Style = terminal.Style{Foreground: terminal.ColorBrightCyan, Attributes: terminal.AttrBold}
-			opt1Prefix = "► [1] "
-		}
-		currDisp := s.currentDir
-		if len(currDisp) > dialogWidth-26 {
-			currDisp = "..." + currDisp[len(currDisp)-(dialogWidth-29):]
-		}
-		frame.DrawText(dialogRect.Min.Row+4, dialogRect.Min.Column+3, opt1Style, fmt.Sprintf("%sCurrent Directory: %s", opt1Prefix, currDisp))
-
-		opt2Style := terminal.Style{Foreground: terminal.ColorBrightWhite}
-		opt2Prefix := "  [2] "
-		if s.initChoice == 1 {
-			opt2Style = terminal.Style{Foreground: terminal.ColorBrightCyan, Attributes: terminal.AttrBold}
-			opt2Prefix = "► [2] "
-		}
-		frame.DrawText(dialogRect.Min.Row+6, dialogRect.Min.Column+3, opt2Style, opt2Prefix+"Custom Directory Path:")
-
-		inputRect := terminal.NewRect(dialogRect.Min.Row+7, dialogRect.Min.Column+7, 3, dialogRect.Max.Column-dialogRect.Min.Column-10)
-		s.customInitPath.Draw(frame, inputRect)
-
-		frame.DrawText(dialogRect.Min.Row+11, dialogRect.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightBlack}, "[Tab/1/2] Select · [Enter] Confirm · [Esc] Cancel")
-
+		s.drawInitProject(frame, bodyRect, bounds)
 	case ModeDeleteProjectConfirm:
-		s.projectGrid.Draw(frame, bodyRect)
-		s.confirmDlg.Draw(frame, bodyRect)
-
+		s.drawDeleteProjectConfirm(frame, bodyRect)
 	case ModeDeleteProjectPassword:
-		s.projectGrid.Draw(frame, bodyRect)
-		dialogWidth := len(s.deleteProjName) + 38
-		if dialogWidth < 56 {
-			dialogWidth = 56
-		}
-		if dialogWidth > bounds.Max.Column-bounds.Min.Column-6 {
-			dialogWidth = bounds.Max.Column - bounds.Min.Column - 6
-		}
-		dialogHeight := 8
-		dialogTop := bodyRect.Min.Row + (bodyRect.Max.Row-bodyRect.Min.Row-dialogHeight)/2
-		dialogLeft := bodyRect.Min.Column + (bodyRect.Max.Column-bodyRect.Min.Column-dialogWidth)/2
-		passBox := terminal.NewRect(dialogTop, dialogLeft, dialogHeight, dialogWidth)
-
-		// Fill inside of modal so background grid doesn't bleed through
-		frame.FillRect(passBox, ' ', terminal.Style{})
-		frame.DrawBox(passBox, terminal.Style{Foreground: terminal.ColorBrightRed, Attributes: terminal.AttrBold}, "CONFIRM PROJECT VAULT DELETION")
-		frame.DrawText(passBox.Min.Row+1, passBox.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightYellow}, fmt.Sprintf("Enter master password to delete '%s':", s.deleteProjName))
-		inputRect := terminal.NewRect(passBox.Min.Row+3, passBox.Min.Column+3, 3, passBox.Max.Column-passBox.Min.Column-6)
-		s.deletePassInput.Draw(frame, inputRect)
-		frame.DrawText(passBox.Min.Row+6, passBox.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightBlack}, "[Enter] Confirm Delete · [Esc] Cancel")
+		s.drawDeleteProjectPassword(frame, bodyRect, bounds)
 	}
 
 	// Draw Footer with context-sensitive key shortcuts

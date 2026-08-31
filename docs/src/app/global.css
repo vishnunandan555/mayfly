@@ -10,7 +10,7 @@
   --font-jetbrains: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 }
 
-/* Professional dark charcoal / slate-graphite theme (NOT pitch black) */
+/* Professional dark charcoal / slate-graphite theme */
 .dark {
   --color-fd-background: #0d100f;
   --color-fd-card: #131715;
@@ -25,6 +25,18 @@
   --color-fd-muted-foreground: rgba(255, 255, 255, 0.55);
 }
 
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  overflow-x: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 .font-serif-display {
   font-family: var(--font-serif), Georgia, Cambria, 'Times New Roman', Times, serif;
 }
@@ -33,13 +45,22 @@
   font-family: var(--font-space-grotesk), var(--font-inter), system-ui, sans-serif;
 }
 
-/* Sidebar styling — subtle contrast with rounded active pills */
+/* Hide scrollbars while allowing touch swiping */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Sidebar styling: subtle contrast with rounded active pills */
 #nd-sidebar {
   background-color: #0a0d0c;
   border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-/* Active navigation item — soft rounded pill like Fence */
+/* Active navigation item: soft rounded pill */
 #nd-sidebar [data-active='true'] {
   background: rgba(245, 158, 11, 0.12);
   color: #fbbf24;
@@ -54,7 +75,14 @@
   border-radius: 0.5rem;
 }
 
-/* Inline code — warm gold tinted */
+/* Mobile Sidebar Drawer styling */
+#nd-sidebar-dialog {
+  background-color: rgba(10, 13, 12, 0.98);
+  backdrop-filter: blur(16px);
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
+}
+
+/* Inline code: warm gold tinted */
 .prose code:not(pre code) {
   color: #fde68a;
   background: rgba(245, 158, 11, 0.09);
@@ -62,9 +90,18 @@
   border-radius: 4px;
   padding: 0.15em 0.4em;
   font-size: 0.875em;
+  word-break: break-word;
 }
 
-/* Prose links — warm amber */
+/* Code blocks (pre) on mobile */
+.prose pre {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 0.75rem;
+}
+
+/* Prose links: warm amber */
 .prose a {
   color: #fbbf24;
   text-decoration: none;
@@ -88,18 +125,30 @@
   font-weight: 500;
 }
 
-/* Table styling in docs */
+/* Table styling in docs - Guaranteed mobile swipeable */
 .prose table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   background-color: #111513;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0.75rem;
-  overflow: hidden;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
 }
 
 .prose thead th {
   background-color: rgba(255, 255, 255, 0.03);
   color: #e5e5e5;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.75rem 1rem;
+  white-space: nowrap;
+}
+
+.prose tbody td {
+  padding: 0.75rem 1rem;
 }
 
 .prose tbody tr:not(:last-child) td {
@@ -118,4 +167,13 @@
   border-color: rgba(245, 158, 11, 0.35);
   background-color: #151a18;
   transform: translateY(-1px);
+}
+
+/* Safe area insets for mobile dynamic island / notch */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }

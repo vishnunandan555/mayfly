@@ -8,7 +8,7 @@ icon: BookOpen
 
 The fundamental promise of MayFly is that **decrypted plaintext secrets never touch physical storage media**.
 
-```
+```text
 [~/.mayfly/vault.enc]  <--- Encrypted at rest (AES-256-GCM)
           │
           │ User provides master password
@@ -21,7 +21,7 @@ The fundamental promise of MayFly is that **decrypted plaintext secrets never to
           │
           │ Child process terminates
           ▼
-[Memory Page Freed]    <--- Buffers zeroed, no disk trace remaining
+[Memory Page Freed]    <--- Buffers zeroed with runtime.KeepAlive, no disk trace
 ```
 
 Even if an attacker runs a disk-scanning script or inspects filesystem caches after execution, no unencrypted credential files exist.
@@ -32,7 +32,7 @@ Even if an attacker runs a disk-scanning script or inspects filesystem caches af
 
 Traditional tools often bind configurations to folder names (e.g. `my-app`). If you have two repositories with identical names in different directories (e.g. `/home/user/work/api` vs `/home/user/personal/api`), path collisions can cause accidental secret cross-contamination.
 
-MayFly eliminates this by resolving the **Linux filesystem device ID (`st_dev`) and inode number (`st_ino`)**:
+MayFly eliminates this by resolving the **filesystem device ID (`st_dev`) and inode number (`st_ino`)**:
 
 - Inode numbers are unique hardware identifiers assigned by the filesystem.
 - Symlinks and directory renames preserve the same underlying inode.
@@ -50,7 +50,17 @@ Instead of passing shell strings through `/bin/sh -c`, MayFly uses the Go standa
 
 ---
 
-## 4. Tamper-Evident Hash Chain
+## 4. Volatile Memory Safety & Auto-Lock
+
+To protect secrets held in volatile workstation RAM against memory scanning:
+
+- **Buffer Zeroing**: Decrypted password byte slices and credentials are systematically overwritten with zero-bytes upon locking or process exit.
+- **Compiler Dead-Store Preservation**: Zeroing routines invoke `runtime.KeepAlive()` to guarantee that Go compiler optimizations cannot elide the memory-clearing loops.
+- **Idle Auto-Lock Timer**: When running in interactive TUI mode, an internal inactivity timer automatically locks the vault and zeroes all decrypted state after 15 minutes of idle time.
+
+---
+
+## 5. Tamper-Evident Hash Chain
 
 Every operation (vault initialization, key updates, secret injections, leak scans) creates an immutable audit entry linked by SHA-256 hashes:
 
@@ -59,3 +69,4 @@ Hash[N] = SHA256(Hash[N-1] + ":" + Timestamp + ":" + Action + ":" + Data)
 ```
 
 If any entry in `~/.mayfly/audit.log` is modified, deleted, or truncated, `mf audit verify` will detect the broken cryptographic link immediately.
+
