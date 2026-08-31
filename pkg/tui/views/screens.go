@@ -52,6 +52,7 @@ type Screens struct {
 	confirmDlg   *widget.ConfirmDialog
 	editOrigName domain.SecretName
 	revealValue  bool
+	revealTimer  time.Time
 }
 
 func NewScreens(svc *application.Service, currentDir string) *Screens {
@@ -95,6 +96,23 @@ func (s *Screens) SetProjectScoped(proj domain.Project) {
 func (s *Screens) SetStatus(msg string) {
 	s.status = msg
 	s.statusTimer = time.Now()
+}
+
+func (s *Screens) Tick() {
+	if s.revealValue && !s.revealTimer.IsZero() {
+		elapsed := time.Since(s.revealTimer)
+		if elapsed >= 10*time.Second {
+			s.revealValue = false
+			s.revealTimer = time.Time{}
+			s.SetStatus("🔒 Secrets auto-masked after 10s timeout")
+			s.reloadSecrets()
+		} else {
+			remaining := 10 - int(elapsed.Seconds())
+			s.status = fmt.Sprintf("👁️ Secret revealed (%ds remaining before auto-hide)", remaining)
+		}
+	} else if !s.statusTimer.IsZero() && time.Since(s.statusTimer) > 4*time.Second && !s.revealValue {
+		s.status = ""
+	}
 }
 
 func (s *Screens) reloadProjects() {
@@ -313,8 +331,15 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 					s.SetStatus(fmt.Sprintf("✓ Copied '%s' to clipboard!", sec.Name))
 				}
 				return false
-			case 'v', 'V': // Toggle reveal
+			case 'v', 'V': // Toggle reveal with 10s auto-hide countdown
 				s.revealValue = !s.revealValue
+				if s.revealValue {
+					s.revealTimer = time.Now()
+					s.status = "👁️ Secret revealed (10s remaining before auto-hide)"
+				} else {
+					s.revealTimer = time.Time{}
+					s.SetStatus("🔒 Secrets masked")
+				}
 				s.reloadSecrets()
 				return false
 			case 'n', 'N': // Add new secret

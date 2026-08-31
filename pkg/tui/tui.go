@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"os/signal"
+	"time"
 
 	"mayfly/pkg/application"
 	"mayfly/pkg/domain"
@@ -76,8 +77,16 @@ func Run(svc *application.Service, opts Options) error {
 		}
 	}()
 
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
 		select {
+		case <-ticker.C:
+			screens.Tick()
+			screens.Draw(frame)
+			_ = term.Render(frame)
+
 		case <-sigCh:
 			newSz, err := terminal.GetSize(os.Stdout)
 			if err == nil {
