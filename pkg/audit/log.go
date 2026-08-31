@@ -158,6 +158,13 @@ func (l *Log) Record(ctx context.Context, action domain.AuditAction, projectID, 
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	lastHash, seq, err := l.scanAndVerifyLocked()
+	if err != nil {
+		return err
+	}
+	l.lastHash = lastHash
+	l.sequence = seq
+
 	l.sequence++
 	now := time.Now().UTC()
 
