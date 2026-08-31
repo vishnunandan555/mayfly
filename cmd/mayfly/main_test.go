@@ -39,6 +39,11 @@ func executeMayfly(t *testing.T, args []string, input string, dir string) (int, 
 func TestCompleteCLIWorkflow(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("HOMEDRIVE", "")
+		t.Setenv("HOMEPATH", "")
+	}
 
 	projDir := filepath.Join(t.TempDir(), "test-app")
 	if err := os.MkdirAll(projDir, 0755); err != nil {
