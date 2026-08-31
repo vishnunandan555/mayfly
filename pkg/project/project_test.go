@@ -60,10 +60,15 @@ func TestProjectRegistry(t *testing.T) {
 	if oldP.ID != proj.ID {
 		t.Fatalf("expected old ID %s, got %s", proj.ID, oldP.ID)
 	}
-	if newP.CanonicalPath != newProjDir {
-		t.Fatalf("expected new path %s, got %s", newProjDir, newP.CanonicalPath)
+	expectedPath, err := filepath.EvalSymlinks(newProjDir)
+	if err != nil {
+		expectedPath = newProjDir
+	}
+	if newP.CanonicalPath != expectedPath {
+		t.Fatalf("expected new path %s, got %s", expectedPath, newP.CanonicalPath)
 	}
 }
+
 
 func osMkdir(p string) error {
 	return os.MkdirAll(p, 0755)

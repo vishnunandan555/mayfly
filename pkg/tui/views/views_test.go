@@ -2,6 +2,7 @@ package views
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"mayfly/pkg/application"
@@ -14,13 +15,16 @@ import (
 func setupTestViews(t *testing.T) (*Screens, *application.Service) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
 
-	reg, err := project.NewRegistry("")
+	regPath := filepath.Join(tempHome, ".mayfly", "projects.json")
+	reg, err := project.NewRegistry(regPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	storage, err := vault.NewStorage("", 1000)
+	vaultPath := filepath.Join(tempHome, ".mayfly", "vault.enc")
+	storage, err := vault.NewStorage(vaultPath, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,6 +37,7 @@ func setupTestViews(t *testing.T) (*Screens, *application.Service) {
 	screens := NewScreens(svc, tempHome)
 	return screens, svc
 }
+
 
 func TestScreensNavigationAndDraw(t *testing.T) {
 	screens, svc := setupTestViews(t)
