@@ -112,10 +112,12 @@ func ReadPassword(f *os.File) ([]byte, error) {
 		n, rErr := f.Read(buf[:])
 		if n > 0 {
 			b := buf[0]
-			if b == '\n' || b == '\r' {
+			if b == '\n' {
 				break
 			}
-			pass = append(pass, b)
+			if b != '\r' {
+				pass = append(pass, b)
+			}
 		}
 		if rErr != nil {
 			if len(pass) > 0 {

@@ -11,6 +11,13 @@ import (
 	"mayfly/pkg/domain"
 )
 
+func shellCmd(script string) []string {
+	if runtime.GOOS == "windows" {
+		return []string{"cmd", "/c", script}
+	}
+	return []string{"sh", "-c", script}
+}
+
 func executeMayfly(t *testing.T, args []string, input string, dir string) (int, string, string) {
 	t.Helper()
 	oldDir, err := os.Getwd()
@@ -33,7 +40,13 @@ func executeMayfly(t *testing.T, args []string, input string, dir string) (int, 
 func TestCompleteCLIWorkflow(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
-	t.Setenv("USERPROFILE", tempHome)
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", tempHome)
+		t.Setenv("HOMEDRIVE", "")
+		t.Setenv("HOMEPATH", "")
+	} else {
+		t.Setenv("USERPROFILE", tempHome)
+	}
 
 	projDir := filepath.Join(t.TempDir(), "test-app")
 	if err := os.MkdirAll(projDir, 0755); err != nil {

@@ -100,6 +100,13 @@ func (l *List) Draw(f *terminal.Frame, bounds terminal.Rect) {
 		l.Offset = l.Selected - visibleRows + 1
 	}
 
+	if l.Offset < 0 {
+		l.Offset = 0
+	}
+	if len(l.Items) > 0 && l.Offset >= len(l.Items) {
+		l.Offset = len(l.Items) - 1
+	}
+
 	contentWidth := bounds.Max.Column - bounds.Min.Column - 4
 	if contentWidth <= 0 {
 		return

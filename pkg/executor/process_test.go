@@ -3,11 +3,21 @@ package executor
 import (
 	"bytes"
 	"context"
+	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 
 	"mayfly/pkg/domain"
 )
+
+func shellCmd(script string) []string {
+	if runtime.GOOS == "windows" {
+		return []string{"cmd", "/c", script}
+	}
+	return []string{"sh", "-c", script}
+}
 
 func TestProcessExecutorEnvironmentOverlay(t *testing.T) {
 	ctx := context.Background()
@@ -19,8 +29,12 @@ func TestProcessExecutorEnvironmentOverlay(t *testing.T) {
 		"MAYFLY_TEST_SECRET": "hello_from_ram",
 	}
 
+	cmdScript := "echo VAL=$MAYFLY_TEST_SECRET"
+	if runtime.GOOS == "windows" {
+		cmdScript = "echo VAL=%MAYFLY_TEST_SECRET%"
+	}
 	req := domain.ExecutionRequest{
-		Command: []string{"sh", "-c", "echo VAL=$MAYFLY_TEST_SECRET"},
+		Command: shellCmd(cmdScript),
 	}
 
 	res, err := exec.Execute(ctx, req, secrets)
@@ -36,5 +50,26 @@ func TestProcessExecutorEnvironmentOverlay(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "MAYFLY_TEST_SECRET") {
 		t.Fatalf("expected injection notification in stderr, got: %s", stderr.String())
+	}
+}
+
+func TestTerminateChildInterruptKillsWindowsChild(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows-only signal regression test")
+	}
+
+	cmd := exec.Command("ping", "-n", "30", "127.0.0.1")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start ping: %v", err)
+	}
+
+	if err := terminateChild(cmd, os.Interrupt); err != nil && !strings.Contains(err.Error(), "process already finished") {
+		t.Fatalf("terminateChild returned unexpected error: %v", err)
+	}
+
+	if err := cmd.Wait(); err == nil {
+		if cmd.ProcessState == nil || !cmd.ProcessState.Exited() {
+			t.Fatal("expected ping process to be terminated by interrupt")
+		}
 	}
 }
