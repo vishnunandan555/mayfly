@@ -14,6 +14,7 @@ VERSION="${MAYFLY_VERSION:-v0.0.3}"
 
 UNINSTALL=false
 UPDATE=false
+FRESH=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -23,11 +24,15 @@ for arg in "$@"; do
         --update)
             UPDATE=true
             ;;
+        --reinstall|--fresh)
+            FRESH=true
+            ;;
         --help|-h)
             echo "MayFly Installer"
             echo "Usage: ./install.sh [OPTIONS]"
-            echo "  (no args)       Install mayfly and mf to ~/.local/bin with SHA-256 verification"
-            echo "  --update        Rebuild / update installed binaries"
+            echo "  (no args)       Interactive install / update with SHA-256 verification"
+            echo "  --update        Update installed binaries (preserves ~/.mayfly vault)"
+            echo "  --reinstall     Fresh reinstall (wipes ~/.mayfly vault and starts clean)"
             echo "  --uninstall, -u Cleanly remove mayfly and mf"
             exit 0
             ;;
@@ -80,6 +85,84 @@ if [ "$UNINSTALL" = true ]; then
 fi
 
 # -------------------------------------------------------------
+# EXISTING INSTALLATION CHECK
+# -------------------------------------------------------------
+HAS_PREV=false
+if [ -f "${INSTALL_DIR}/mayfly" ] || [ -f "${INSTALL_DIR}/mf" ] || [ -d "${VAULT_DIR}" ]; then
+    HAS_PREV=true
+fi
+
+if [ "$FRESH" = true ]; then
+    echo "Removing previous vault and binaries..."
+    rm -rf "${VAULT_DIR}"
+    rm -f "${INSTALL_DIR}/mayfly" "${INSTALL_DIR}/mf"
+    echo "✓ Cleaned previous installation."
+elif [ "$UPDATE" = false ] && [ "$HAS_PREV" = true ]; then
+    # Interactive prompt if existing installation found
+    READ_FD=""
+    if [ -t 0 ]; then
+        READ_FD="stdin"
+    elif [ -c /dev/tty ]; then
+        READ_FD="/dev/tty"
+    fi
+
+    if [ -n "$READ_FD" ]; then
+        echo "================================================="
+        echo "  Existing MayFly Installation Detected"
+        echo "================================================="
+        echo "MayFly files were found on this machine:"
+        [ -f "${INSTALL_DIR}/mayfly" ] && echo "  • Binary : ${INSTALL_DIR}/mayfly"
+        [ -d "${VAULT_DIR}" ] && echo "  • Vault  : ${VAULT_DIR}"
+        echo ""
+        echo "Choose an option:"
+        echo "  [1] Update / upgrade binaries (Keep existing vault secrets) [DEFAULT]"
+        echo "  [2] Remove and reinstall (Wipe ~/.mayfly vault and install fresh)"
+        echo "  [3] Cancel"
+        echo ""
+
+        PREV_CHOICE=""
+        if [ "$READ_FD" = "/dev/tty" ]; then
+            read -p "Select option [1/2/3] (default: 1): " -r PREV_CHOICE < /dev/tty 2>/dev/null || PREV_CHOICE=1
+        else
+            read -p "Select option [1/2/3] (default: 1): " -r PREV_CHOICE || PREV_CHOICE=1
+        fi
+        PREV_CHOICE="${PREV_CHOICE:-1}"
+
+        case "$PREV_CHOICE" in
+            1)
+                UPDATE=true
+                ;;
+            2)
+                CONFIRM=""
+                echo ""
+                echo "WARNING: This will permanently delete all encrypted secrets in ${VAULT_DIR}."
+                if [ "$READ_FD" = "/dev/tty" ]; then
+                    read -p "Are you sure you want to wipe ~/.mayfly and reinstall? [y/N]: " -r CONFIRM < /dev/tty 2>/dev/null || CONFIRM="n"
+                else
+                    read -p "Are you sure you want to wipe ~/.mayfly and reinstall? [y/N]: " -r CONFIRM || CONFIRM="n"
+                fi
+                if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+                    echo "Removing previous vault and binaries..."
+                    rm -rf "${VAULT_DIR}"
+                    rm -f "${INSTALL_DIR}/mayfly" "${INSTALL_DIR}/mf"
+                    echo "✓ Wiped previous installation."
+                else
+                    echo "Reinstallation canceled."
+                    exit 0
+                fi
+                ;;
+            *)
+                echo "Installation canceled."
+                exit 0
+                ;;
+        esac
+    else
+        # Non-interactive fallback: preserve user vault
+        UPDATE=true
+    fi
+fi
+
+# -------------------------------------------------------------
 # INSTALL / UPDATE MODE
 # -------------------------------------------------------------
 
@@ -114,6 +197,7 @@ case "$OS" in
         ;;
 esac
 
+echo ""
 echo "================================================="
 if [ "$UPDATE" = true ]; then
     echo "  MayFly: Updating to ${VERSION}"
@@ -128,6 +212,7 @@ echo "  Install Path   : ${INSTALL_DIR}"
 echo "  Security Mode  : Tier-2 Cryptographic SHA-256 Verified"
 echo "================================================="
 echo ""
+
 
 # Prompt for command alias selection
 echo "Choose command alias to install:"

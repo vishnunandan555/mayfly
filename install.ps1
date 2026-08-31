@@ -11,9 +11,10 @@
 param (
     [switch]$Uninstall,
     [switch]$Update,
+    [switch]$Fresh,
+    [switch]$Reinstall,
     [string]$Version = "v0.0.3"
 )
-
 
 $InstallDir = "$HOME\.local\bin"
 $VaultDir = "$HOME\.mayfly"
@@ -57,9 +58,73 @@ if ($Uninstall) {
     exit 0
 }
 
+# Check for existing installation
+$hasPrev = (Test-Path "$InstallDir\mayfly.exe") -or (Test-Path "$InstallDir\mf.exe") -or (Test-Path $VaultDir)
+
+if ($Fresh -or $Reinstall) {
+    Write-Host "Removing previous vault and binaries..." -ForegroundColor Yellow
+    Remove-Item "$InstallDir\mayfly.exe" -ErrorAction SilentlyContinue
+    Remove-Item "$InstallDir\mf.exe" -ErrorAction SilentlyContinue
+    if (Test-Path $VaultDir) {
+        Remove-Item -Recurse -Force $VaultDir
+    }
+    Write-Host "✓ Wiped previous installation." -ForegroundColor Green
+} elseif (-not $Update -and $hasPrev) {
+    if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+        Write-Host "=================================================" -ForegroundColor Yellow
+        Write-Host "  Existing MayFly Installation Detected" -ForegroundColor Yellow
+        Write-Host "=================================================" -ForegroundColor Yellow
+        Write-Host "MayFly files were found on this machine:"
+        if (Test-Path "$InstallDir\mayfly.exe") { Write-Host "  • Binary : $InstallDir\mayfly.exe" }
+        if (Test-Path $VaultDir) { Write-Host "  • Vault  : $VaultDir" }
+        Write-Host ""
+        Write-Host "Choose an option:"
+        Write-Host "  [1] Update / upgrade binaries (Keep existing vault secrets) [DEFAULT]"
+        Write-Host "  [2] Remove and reinstall (Wipe ~/.mayfly vault and install fresh)"
+        Write-Host "  [3] Cancel"
+        Write-Host ""
+
+        $prevChoice = "1"
+        try {
+            $inVal = Read-Host "Select option [1/2/3] (default: 1)"
+            if (-not [string]::IsNullOrWhiteSpace($inVal)) { $prevChoice = $inVal }
+        } catch {
+            $prevChoice = "1"
+        }
+
+        switch ($prevChoice) {
+            "1" {
+                $Update = $true
+            }
+            "2" {
+                Write-Host "`nWARNING: This will permanently delete all encrypted secrets in $VaultDir." -ForegroundColor Red
+                $confirm = Read-Host "Are you sure you want to wipe ~/.mayfly and reinstall? [y/N]"
+                if ($confirm -eq "y" -or $confirm -eq "Y") {
+                    Remove-Item "$InstallDir\mayfly.exe" -ErrorAction SilentlyContinue
+                    Remove-Item "$InstallDir\mf.exe" -ErrorAction SilentlyContinue
+                    if (Test-Path $VaultDir) {
+                        Remove-Item -Recurse -Force $VaultDir
+                    }
+                    Write-Host "✓ Wiped previous installation." -ForegroundColor Green
+                } else {
+                    Write-Host "Reinstallation canceled."
+                    exit 0
+                }
+            }
+            Default {
+                Write-Host "Installation canceled."
+                exit 0
+            }
+        }
+    } else {
+        $Update = $true
+    }
+}
+
 # Accurate Windows Architecture Detection
 $rawArch = $env:PROCESSOR_ARCHITECTURE
 $arch = if ($rawArch -eq "ARM64") { "arm64" } else { "amd64" }
+
 
 Write-Host "=================================================" -ForegroundColor Cyan
 if ($Update) {
