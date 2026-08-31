@@ -26,7 +26,10 @@ if ($Uninstall) {
     Write-Host "clean your User PATH, and PERMANENTLY DELETE all encrypted"
     Write-Host "secrets in $VaultDir.`n"
 
-    $resp = Read-Host "Are you sure you want to completely uninstall MayFly? [y/N]"
+    $resp = "y"
+    if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+        $resp = Read-Host "Are you sure you want to completely uninstall MayFly? [y/N]"
+    }
     if ($resp -ne "y" -and $resp -ne "Y") {
         Write-Host "Uninstallation canceled."
         exit 0
@@ -39,7 +42,7 @@ if ($Uninstall) {
     # Clean User PATH if it was added by MayFly
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($userPath -like "*$InstallDir*") {
-        $cleanedPath = ($userPath.Split(';') | Where-Object { $_ -ne $InstallDir }) -join ';'
+        $cleanedPath = ($userPath.Split(';') | Where-Object { $_ -ne $InstallDir -and $_ -ne "" }) -join ';'
         [Environment]::SetEnvironmentVariable("Path", $cleanedPath, "User")
         Write-Host "✓ Cleaned $InstallDir from User PATH." -ForegroundColor Green
     }
@@ -53,7 +56,9 @@ if ($Uninstall) {
     exit 0
 }
 
-$arch = if ([System.Environment]::Is64BitOperatingSystem) { "amd64" } else { "arm64" }
+# Accurate Windows Architecture Detection
+$rawArch = $env:PROCESSOR_ARCHITECTURE
+$arch = if ($rawArch -eq "ARM64") { "arm64" } else { "amd64" }
 
 Write-Host "=================================================" -ForegroundColor Cyan
 if ($Update) {
@@ -69,14 +74,20 @@ Write-Host "  Install Path   : $InstallDir"
 Write-Host "  Security Mode  : Tier-2 Cryptographic SHA-256 Verified"
 Write-Host "=================================================`n" -ForegroundColor Cyan
 
-# Prompt for command alias selection
-Write-Host "Choose command alias to install:"
-Write-Host "  [1] Both 'mayfly' and 'mf' (Recommended: press Enter)"
-Write-Host "  [2] Only 'mayfly'"
-Write-Host "  [3] Only 'mf'`n"
-
-$aliasChoice = Read-Host "Select option [1/2/3]"
-if ([string]::IsNullOrWhiteSpace($aliasChoice)) { $aliasChoice = "1" }
+# Prompt for command alias selection (default: 1)
+$aliasChoice = "1"
+if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+    Write-Host "Choose command alias to install:"
+    Write-Host "  [1] Both 'mayfly' and 'mf' (Recommended: press Enter)"
+    Write-Host "  [2] Only 'mayfly'"
+    Write-Host "  [3] Only 'mf'`n"
+    try {
+        $inputVal = Read-Host "Select option [1/2/3]"
+        if (-not [string]::IsNullOrWhiteSpace($inputVal)) { $aliasChoice = $inputVal }
+    } catch {
+        $aliasChoice = "1"
+    }
+}
 
 if (!(Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
@@ -93,6 +104,8 @@ $baseUrl = if ($Version -eq "latest") {
 $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 
+$installed = $false
+
 try {
     Write-Host "`nDownloading $targetBin from GitHub Releases..."
     $binPath = Join-Path $tempDir $targetBin
@@ -101,52 +114,66 @@ try {
     try {
         Invoke-WebRequest -Uri "$baseUrl/$targetBin" -OutFile $binPath -UseBasicParsing
         Invoke-WebRequest -Uri "$baseUrl/checksums.txt" -OutFile $checksumPath -UseBasicParsing
+
+        Write-Host "Verifying cryptographic SHA-256 checksum..."
+        $computedHash = (Get-FileHash -Path $binPath -Algorithm SHA256).Hash.ToLower()
+        $expectedLine = Get-Content $checksumPath | Where-Object { $_ -match $targetBin }
+
+        if (-not $expectedLine -or -not ($expectedLine.ToLower().StartsWith($computedHash))) {
+            Write-Host "`n[SECURITY ALERT]: Cryptographic checksum verification failed!" -ForegroundColor Red
+            Write-Host "The downloaded binary does not match the published release hash." -ForegroundColor Red
+            Write-Host "Installation aborted to protect your system." -ForegroundColor Red
+            exit 1
+        }
+
+        Write-Host "[OK] Cryptographic SHA-256 Checksum Verified: Authentic & Untampered." -ForegroundColor Green
+        Copy-Item -Force $binPath "$InstallDir\mayfly.exe"
+        $installed = $true
     } catch {
-        Write-Host "`nError: Failed to download release binary or checksums from GitHub Releases ($baseUrl)." -ForegroundColor Red
-        Write-Host "Please verify that release '$Version' exists at https://github.com/$Repo/releases" -ForegroundColor Red
-        exit 1
+        # Fallback to local source build if repository is present
+        $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+        if (Test-Path "$scriptDir\cmd\mayfly\main.go") {
+            Write-Host "Note: Remote release download unavailable; building locally from Go source..." -ForegroundColor Yellow
+            Push-Location $scriptDir
+            try {
+                go build -o "$InstallDir\mayfly.exe" .\cmd\mayfly
+                $installed = $true
+            } finally {
+                Pop-Location
+            }
+        } else {
+            Write-Host "`nError: Failed to download release binary or checksums from GitHub Releases ($baseUrl)." -ForegroundColor Red
+            Write-Host "Please verify that release '$Version' exists at https://github.com/$Repo/releases" -ForegroundColor Red
+            exit 1
+        }
     }
-
-    Write-Host "Verifying cryptographic SHA-256 checksum..."
-    $computedHash = (Get-FileHash -Path $binPath -Algorithm SHA256).Hash.ToLower()
-    $expectedLine = Get-Content $checksumPath | Where-Object { $_ -match $targetBin }
-
-    if (-not $expectedLine -or -not ($expectedLine.ToLower().StartsWith($computedHash))) {
-        Write-Host "`n[SECURITY ALERT]: Cryptographic checksum verification failed!" -ForegroundColor Red
-        Write-Host "The downloaded binary does not match the published release hash." -ForegroundColor Red
-        Write-Host "Installation aborted to protect your system." -ForegroundColor Red
-        exit 1
-    }
-
-    Write-Host "[OK] Cryptographic SHA-256 Checksum Verified: Authentic & Untampered." -ForegroundColor Green
-    Copy-Item -Force $binPath "$InstallDir\mayfly.exe"
 } finally {
     Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
 }
 
-switch ($aliasChoice) {
-    "2" {
-        Remove-Item "$InstallDir\mf.exe" -ErrorAction SilentlyContinue
-        Write-Host "[OK] Installed mayfly.exe -> $InstallDir\mayfly.exe" -ForegroundColor Green
+if ($installed) {
+    switch ($aliasChoice) {
+        "2" {
+            Remove-Item "$InstallDir\mf.exe" -ErrorAction SilentlyContinue
+            Write-Host "[OK] Installed mayfly.exe -> $InstallDir\mayfly.exe" -ForegroundColor Green
+        }
+        "3" {
+            Move-Item -Force "$InstallDir\mayfly.exe" "$InstallDir\mf.exe"
+            Write-Host "[OK] Installed mf.exe -> $InstallDir\mf.exe" -ForegroundColor Green
+        }
+        Default {
+            Copy-Item -Force "$InstallDir\mayfly.exe" "$InstallDir\mf.exe"
+            Write-Host "[OK] Installed mayfly.exe -> $InstallDir\mayfly.exe" -ForegroundColor Green
+            Write-Host "[OK] Installed mf.exe     -> $InstallDir\mf.exe" -ForegroundColor Green
+        }
     }
-    "3" {
-        Move-Item -Force "$InstallDir\mayfly.exe" "$InstallDir\mf.exe"
-        Write-Host "[OK] Installed mf.exe -> $InstallDir\mf.exe" -ForegroundColor Green
-    }
-    Default {
-        Copy-Item -Force "$InstallDir\mayfly.exe" "$InstallDir\mf.exe"
-        Write-Host "[OK] Installed mayfly.exe -> $InstallDir\mayfly.exe" -ForegroundColor Green
-        Write-Host "[OK] Installed mf.exe     -> $InstallDir\mf.exe" -ForegroundColor Green
-    }
-}
 
-# Prompt before adding to User PATH if missing
-$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($userPath -notlike "*$InstallDir*") {
-    Write-Host "`nNote: '$InstallDir' is not in your current User PATH."
-    $addPath = Read-Host "Add '$InstallDir' to User PATH? [Y/n]"
-    if ([string]::IsNullOrWhiteSpace($addPath) -or $addPath -eq "y" -or $addPath -eq "Y") {
-        [Environment]::SetEnvironmentVariable("Path", "$userPath;$InstallDir", "User")
+    # Automatically ensure User PATH is configured
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($userPath -notlike "*$InstallDir*") {
+        $newPath = if ([string]::IsNullOrWhiteSpace($userPath)) { $InstallDir } else { "$userPath;$InstallDir" }
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        $env:Path += ";$InstallDir"
         Write-Host "[OK] Added $InstallDir to User PATH." -ForegroundColor Green
     }
 }

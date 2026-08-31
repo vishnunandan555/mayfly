@@ -65,7 +65,7 @@ if [ "$UNINSTALL" = true ]; then
     echo "✓ Removed ~/.mayfly directory and all encrypted vaults."
 
     # Clean shell config PATH additions
-    for rc in "${HOME}/.zshrc" "${HOME}/.bashrc" "${HOME}/.bash_profile" "${HOME}/.profile"; do
+    for rc in "${HOME}/.zshrc" "${HOME}/.zprofile" "${HOME}/.bashrc" "${HOME}/.bash_profile" "${HOME}/.profile"; do
         if [ -f "$rc" ] && grep -q "Added by MayFly" "$rc"; then
             sed -i '/# Added by MayFly/d' "$rc" 2>/dev/null || sed -i '' '/# Added by MayFly/d' "$rc" 2>/dev/null || true
             sed -i '/export PATH=.*\.local\/bin/d' "$rc" 2>/dev/null || sed -i '' '/export PATH=.*\.local\/bin/d' "$rc" 2>/dev/null || true
@@ -161,57 +161,66 @@ fi
 
 echo ""
 echo "─── [1/3] Downloading Release Artifacts ─────────────────"
-echo "Fetching ${TARGET_BIN} from ${BASE_URL}..."
+INSTALLED_LOCAL=false
 
 if ! curl -fsSL "${BASE_URL}/${TARGET_BIN}" -o "${TMP_DIR}/${TARGET_BIN}" 2>/dev/null; then
+    if [ -n "$SRC_DIR" ] && [ -f "$SRC_DIR/cmd/mayfly/main.go" ] && command -v go >/dev/null 2>&1; then
+        echo "Note: Remote release download unavailable; building locally from Go source..."
+        (cd "$SRC_DIR" && go build -o "${INSTALL_DIR}/mayfly" ./cmd/mayfly)
+        chmod +x "${INSTALL_DIR}/mayfly"
+        INSTALLED_LOCAL=true
+    else
+        echo ""
+        echo "Error: Failed to download release binary '${TARGET_BIN}' from GitHub Releases (${BASE_URL})."
+        echo "Please check your network connection or verify that release ${VERSION} is published at:"
+        echo "https://github.com/${GITHUB_REPO}/releases"
+        exit 1
+    fi
+fi
+
+if [ "$INSTALLED_LOCAL" = false ]; then
+    if ! curl -fsSL "${BASE_URL}/checksums.txt" -o "${TMP_DIR}/checksums.txt" 2>/dev/null; then
+        echo ""
+        echo "Error: Failed to download official 'checksums.txt' manifest from GitHub Releases."
+        echo "Installation aborted to prevent running unverified binaries."
+        exit 1
+    fi
+
+    echo "[OK] Downloaded binary and published checksums.txt"
     echo ""
-    echo "Error: Failed to download release binary '${TARGET_BIN}' from GitHub Releases (${BASE_URL})."
-    echo "Please check your network connection or verify that release ${VERSION} is published at:"
-    echo "https://github.com/${GITHUB_REPO}/releases"
-    exit 1
+    echo "─── [2/3] Cryptographic SHA-256 Verification ────────────"
+    cd "${TMP_DIR}"
+
+    EXPECTED_HASH="$(grep "${TARGET_BIN}" checksums.txt 2>/dev/null | awk '{print $1}' || echo "")"
+    COMPUTED_HASH=""
+
+    if command -v sha256sum >/dev/null 2>&1; then
+        COMPUTED_HASH="$(sha256sum "${TARGET_BIN}" | awk '{print $1}')"
+    elif command -v shasum >/dev/null 2>&1; then
+        COMPUTED_HASH="$(shasum -a 256 "${TARGET_BIN}" | awk '{print $1}')"
+    else
+        echo "Error: Neither 'sha256sum' nor 'shasum' is available on this system."
+        echo "Cannot cryptographically verify binary integrity. Installation aborted."
+        exit 1
+    fi
+
+    echo "Published Hash : ${EXPECTED_HASH}"
+    echo "Computed Hash  : ${COMPUTED_HASH}"
+
+    if [ -n "$EXPECTED_HASH" ] && [ "$EXPECTED_HASH" = "$COMPUTED_HASH" ]; then
+        echo "Verification   : [OK] 100% BIT-FOR-BIT MATCH (Authentic & Untampered)"
+        mv "${TMP_DIR}/${TARGET_BIN}" "${INSTALL_DIR}/mayfly"
+    else
+        echo "Verification   : [FAILED] MISMATCH"
+        echo ""
+        echo "[SECURITY ALERT]: Cryptographic checksum verification failed!"
+        echo "The downloaded binary does NOT match the published release hash."
+        echo "Installation aborted to protect your system from potential tampering."
+        exit 1
+    fi
+
+    chmod +x "${INSTALL_DIR}/mayfly"
 fi
-
-if ! curl -fsSL "${BASE_URL}/checksums.txt" -o "${TMP_DIR}/checksums.txt" 2>/dev/null; then
-    echo ""
-    echo "Error: Failed to download official 'checksums.txt' manifest from GitHub Releases."
-    echo "Installation aborted to prevent running unverified binaries."
-    exit 1
-fi
-
-echo "[OK] Downloaded binary and published checksums.txt"
-echo ""
-echo "─── [2/3] Cryptographic SHA-256 Verification ────────────"
-cd "${TMP_DIR}"
-
-EXPECTED_HASH="$(grep "${TARGET_BIN}" checksums.txt 2>/dev/null | awk '{print $1}' || echo "")"
-COMPUTED_HASH=""
-
-if command -v sha256sum >/dev/null 2>&1; then
-    COMPUTED_HASH="$(sha256sum "${TARGET_BIN}" | awk '{print $1}')"
-elif command -v shasum >/dev/null 2>&1; then
-    COMPUTED_HASH="$(shasum -a 256 "${TARGET_BIN}" | awk '{print $1}')"
-else
-    echo "Error: Neither 'sha256sum' nor 'shasum' is available on this system."
-    echo "Cannot cryptographically verify binary integrity. Installation aborted."
-    exit 1
-fi
-
-echo "Published Hash : ${EXPECTED_HASH}"
-echo "Computed Hash  : ${COMPUTED_HASH}"
-
-if [ -n "$EXPECTED_HASH" ] && [ "$EXPECTED_HASH" = "$COMPUTED_HASH" ]; then
-    echo "Verification   : [OK] 100% BIT-FOR-BIT MATCH (Authentic & Untampered)"
-    mv "${TMP_DIR}/${TARGET_BIN}" "${INSTALL_DIR}/mayfly"
-else
-    echo "Verification   : [FAILED] MISMATCH"
-    echo ""
-    echo "[SECURITY ALERT]: Cryptographic checksum verification failed!"
-    echo "The downloaded binary does NOT match the published release hash."
-    echo "Installation aborted to protect your system from potential tampering."
-    exit 1
-fi
-
-chmod +x "${INSTALL_DIR}/mayfly"
 
 echo ""
 echo "─── [3/3] Configuring Binaries & Aliases ────────────────"
@@ -231,49 +240,50 @@ case "$ALIAS_CHOICE" in
         ;;
 esac
 
-# Ensure PATH is configured
+# Ensure PATH is configured across user's active shell configs
 PATH_UPDATED=false
 case ":$PATH:" in
     *":${INSTALL_DIR}:"*) ;;
     *)
-        SHELL_NAME="$(basename "${SHELL:-bash}")"
-        RC_FILE=""
-        if [ "$SHELL_NAME" = "zsh" ]; then
-            RC_FILE="${HOME}/.zshrc"
-        elif [ "$SHELL_NAME" = "bash" ]; then
-            if [ -f "${HOME}/.bashrc" ]; then
-                RC_FILE="${HOME}/.bashrc"
-            else
-                RC_FILE="${HOME}/.bash_profile"
+        TARGET_RCS=()
+        if [ "$OS" = "darwin" ]; then
+            # macOS defaults to zsh (both interactive and login shells)
+            TARGET_RCS+=("${HOME}/.zshrc" "${HOME}/.zprofile")
+            if [ -f "${HOME}/.bash_profile" ] || [ -f "${HOME}/.bashrc" ]; then
+                TARGET_RCS+=("${HOME}/.bash_profile")
             fi
-        elif [ "$SHELL_NAME" = "fish" ]; then
-            mkdir -p "${HOME}/.config/fish"
-            RC_FILE="${HOME}/.config/fish/config.fish"
-        fi
-
-        if [ -n "$RC_FILE" ]; then
-            echo ""
-            echo "Note: '${INSTALL_DIR}' is not currently in your system PATH."
-            ADD_PATH_RESP=""
-            if [ -t 0 ]; then
-                read -p "Add '${INSTALL_DIR}' to $(basename "$RC_FILE")? [Y/n]: " -r ADD_PATH_RESP || ADD_PATH_RESP="y"
-            elif [ -c /dev/tty ]; then
-                read -p "Add '${INSTALL_DIR}' to $(basename "$RC_FILE")? [Y/n]: " -r ADD_PATH_RESP < /dev/tty 2>/dev/null || ADD_PATH_RESP="y"
+        else
+            SHELL_NAME="$(basename "${SHELL:-bash}")"
+            if [ "$SHELL_NAME" = "zsh" ]; then
+                TARGET_RCS+=("${HOME}/.zshrc")
+            elif [ "$SHELL_NAME" = "fish" ]; then
+                mkdir -p "${HOME}/.config/fish"
+                TARGET_RCS+=("${HOME}/.config/fish/config.fish")
             else
-                ADD_PATH_RESP="y"
-            fi
-            ADD_PATH_RESP="${ADD_PATH_RESP:-y}"
-
-            if [[ "$ADD_PATH_RESP" =~ ^[Yy]$ ]]; then
-                if ! grep -q "Added by MayFly" "$RC_FILE" 2>/dev/null; then
-                    echo "" >> "$RC_FILE"
-                    echo "# Added by MayFly installer" >> "$RC_FILE"
-                    echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$RC_FILE"
-                    PATH_UPDATED=true
-                    echo "[OK] Added PATH export to $(basename "$RC_FILE")"
+                if [ -f "${HOME}/.bashrc" ]; then
+                    TARGET_RCS+=("${HOME}/.bashrc")
+                else
+                    TARGET_RCS+=("${HOME}/.bash_profile")
                 fi
             fi
         fi
+
+        for rc in "${TARGET_RCS[@]}"; do
+            if [ -n "$rc" ]; then
+                touch "$rc" 2>/dev/null || true
+                if ! grep -q "Added by MayFly" "$rc" 2>/dev/null; then
+                    echo "" >> "$rc"
+                    echo "# Added by MayFly installer" >> "$rc"
+                    if [[ "$rc" == *".config/fish/config.fish" ]]; then
+                        echo "set -gx PATH \$HOME/.local/bin \$PATH" >> "$rc"
+                    else
+                        echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$rc"
+                    fi
+                    PATH_UPDATED=true
+                    echo "[OK] Added PATH export to $(basename "$rc")"
+                fi
+            fi
+        done
         ;;
 esac
 
