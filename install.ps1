@@ -11,7 +11,7 @@
 param (
     [switch]$Uninstall,
     [switch]$Update,
-    [string]$Version = "v0.0.1"
+    [string]$Version = "v0.0.2"
 )
 
 $InstallDir = "$HOME\.local\bin"

@@ -2,7 +2,7 @@
 track = "E"
 track_name = "Security & Crypto Utilities"
 secondary_track = "A"
-pitch = "AES-256-GCM encrypted secret vault with in-memory process injection: never write a .env file to disk again — all secrets live in RAM and are injected directly into your child process, then zeroed. Built from scratch: hand-rolled PBKDF2-HMAC-SHA256 KDF, full terminal UI, ANSI parser, SHA-256 hash-chained audit log, and plaintext credential scanner — 100% Go standard library."
+pitch = "AES-256-GCM encrypted secret vault with in-memory process injection: never write a .env file to disk again. All secrets live in RAM and are injected directly into your child process, then zeroed. Built from scratch: hand-rolled PBKDF2-HMAC-SHA256 KDF, full terminal UI, ANSI parser, SHA-256 hash-chained audit log, and plaintext credential scanner in 100% pure Go standard library."
 entrypoint = "cmd/mayfly"
 build_command = "make install"
 reproducible_command = "make reproducible"

@@ -9,7 +9,7 @@ INSTALL_DIR="${HOME}/.local/bin"
 VAULT_DIR="${HOME}/.mayfly"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
 GITHUB_REPO="vishnunandan555/mayfly"
-VERSION="${MAYFLY_VERSION:-v0.0.1}"
+VERSION="${MAYFLY_VERSION:-v0.0.2}"
 
 UNINSTALL=false
 UPDATE=false
