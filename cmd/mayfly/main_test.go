@@ -5,9 +5,17 @@ import (
 	"mayfly/pkg/domain"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+func shellCmd(script string) []string {
+	if runtime.GOOS == "windows" {
+		return []string{"cmd", "/c", script}
+	}
+	return []string{"sh", "-c", script}
+}
 
 func executeMayfly(t *testing.T, args []string, input string, dir string) (int, string, string) {
 	t.Helper()
@@ -89,7 +97,11 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 	}
 
 	// 5. Run command with injected secret (explicit 'run')
-	code, stdout, stderr = executeMayfly(t, []string{"run", "sh", "-c", "echo DB=$DATABASE_URL"}, "masterpass\n", projDir)
+	runScript := "echo DB=$DATABASE_URL"
+	if runtime.GOOS == "windows" {
+		runScript = "echo DB=%DATABASE_URL%"
+	}
+	code, stdout, stderr = executeMayfly(t, append([]string{"run"}, shellCmd(runScript)...), "masterpass\n", projDir)
 	if code != 0 {
 		t.Fatalf("run failed: code=%d, err=%s", code, stderr)
 	}
@@ -98,7 +110,11 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 	}
 
 	// 5b. Direct command execution without 'run' (e.g. 'mayfly <cmd>' / 'mf <cmd>')
-	code, stdout, stderr = executeMayfly(t, []string{"sh", "-c", "echo DIRECT_DB=$DATABASE_URL"}, "masterpass\n", projDir)
+	directScript := "echo DIRECT_DB=$DATABASE_URL"
+	if runtime.GOOS == "windows" {
+		directScript = "echo DIRECT_DB=%DATABASE_URL%"
+	}
+	code, stdout, stderr = executeMayfly(t, shellCmd(directScript), "masterpass\n", projDir)
 	if code != 0 {
 		t.Fatalf("direct execution failed: code=%d, err=%s", code, stderr)
 	}

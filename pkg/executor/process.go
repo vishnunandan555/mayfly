@@ -52,6 +52,7 @@ func (e *ProcessExecutor) Execute(ctx context.Context, req domain.ExecutionReque
 	cmdArgs := req.Command[1:]
 
 	cmd := exec.CommandContext(ctx, cmdName, cmdArgs...)
+	configureProcess(cmd)
 	cmd.Stdin = e.stdin
 	cmd.Stdout = e.stdout
 	cmd.Stderr = e.stderr
@@ -117,7 +118,7 @@ func (e *ProcessExecutor) Execute(ctx context.Context, req domain.ExecutionReque
 		select {
 		case sig, ok := <-sigChan:
 			if ok && cmd.Process != nil {
-				_ = cmd.Process.Signal(sig)
+				_ = terminateChild(cmd, sig)
 			}
 		case <-ctx.Done():
 			if cmd.Process != nil {

@@ -3,11 +3,19 @@ package executor
 import (
 	"bytes"
 	"context"
+	"runtime"
 	"strings"
 	"testing"
 
 	"mayfly/pkg/domain"
 )
+
+func shellCmd(script string) []string {
+	if runtime.GOOS == "windows" {
+		return []string{"cmd", "/c", script}
+	}
+	return []string{"sh", "-c", script}
+}
 
 func TestProcessExecutorEnvironmentOverlay(t *testing.T) {
 	ctx := context.Background()
@@ -19,8 +27,12 @@ func TestProcessExecutorEnvironmentOverlay(t *testing.T) {
 		"MAYFLY_TEST_SECRET": "hello_from_ram",
 	}
 
+	cmdScript := "echo VAL=$MAYFLY_TEST_SECRET"
+	if runtime.GOOS == "windows" {
+		cmdScript = "echo VAL=%MAYFLY_TEST_SECRET%"
+	}
 	req := domain.ExecutionRequest{
-		Command: []string{"sh", "-c", "echo VAL=$MAYFLY_TEST_SECRET"},
+		Command: shellCmd(cmdScript),
 	}
 
 	res, err := exec.Execute(ctx, req, secrets)
