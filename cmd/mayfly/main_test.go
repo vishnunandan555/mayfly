@@ -203,4 +203,10 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 	if code != 0 || !strings.Contains(stdout, "mayfly v"+domain.Version) {
 		t.Fatalf("version failed: code=%d, err=%s, out=%s", code, stderr, stdout)
 	}
+
+	// 16. Help text contains update
+	code, stdout, stderr = executeMayfly(t, []string{"help"}, "", projDir)
+	if code != 0 || !strings.Contains(stdout, "mayfly update") {
+		t.Fatalf("help failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
 }

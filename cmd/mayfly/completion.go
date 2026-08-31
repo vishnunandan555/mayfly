@@ -30,7 +30,7 @@ func printBashCompletion(w io.Writer) {
     local cur prev words cword
     _init_completion || return
 
-    local commands="init set get list delete run scan audit backup restore migrate import rotate-password completion uninstall version help c current"
+    local commands="init set get list delete run scan audit backup restore migrate import update rotate-password completion uninstall version help c current"
 
     if [[ ${cword} -eq 1 ]]; then
         COMPREPLY=( $(compgen -W "${commands}" -- ${cur}) )
@@ -47,6 +47,10 @@ func printBashCompletion(w io.Writer) {
             ;;
         audit)
             COMPREPLY=( $(compgen -W "verify" -- ${cur}) )
+            return 0
+            ;;
+        update)
+            COMPREPLY=( $(compgen -W "--check --yes" -- ${cur}) )
             return 0
             ;;
     esac
@@ -66,6 +70,7 @@ _mayfly() {
         'list:List all secret keys for current project'
         'delete:Remove a secret from the vault'
         'import:Import secrets from .env file into vault'
+        'update:Check for newer releases and update binary'
         'rotate-password:Re-encrypt vault with new master password'
         'run:Inject secrets in memory and execute process'
         'scan:Scan codebase for plaintext secret leaks'
@@ -98,6 +103,7 @@ complete -c mayfly -n "__fish_use_subcommand" -a get -d "Output decrypted secret
 complete -c mayfly -n "__fish_use_subcommand" -a list -d "List secret keys"
 complete -c mayfly -n "__fish_use_subcommand" -a delete -d "Remove a secret"
 complete -c mayfly -n "__fish_use_subcommand" -a import -d "Import .env file into vault"
+complete -c mayfly -n "__fish_use_subcommand" -a update -d "Check for updates and upgrade binary"
 complete -c mayfly -n "__fish_use_subcommand" -a rotate-password -d "Re-encrypt vault with new password"
 complete -c mayfly -n "__fish_use_subcommand" -a run -d "Inject secrets in memory and execute process"
 complete -c mayfly -n "__fish_use_subcommand" -a scan -d "Scan codebase for plaintext secret leaks"

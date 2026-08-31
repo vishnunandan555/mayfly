@@ -5,6 +5,7 @@
     "run",
     "vault",
     "scan",
-    "audit"
+    "audit",
+    "update"
   ]
 }

@@ -1,0 +1,60 @@
+---
+title: "mayfly update"
+description: Check for newer releases on GitHub and interactively prompt to update the local MayFly binary.
+icon: RefreshCw
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+<Callout type="info" title="Zero Auto-Updates / Strict User Consent">
+MayFly never updates in the background without your explicit permission. The update command checks GitHub release tags, compares semantic versions, displays release notes, and requests confirmation before downloading or replacing binaries.
+</Callout>
+
+## Synopsis
+
+```bash
+# Check and interactively prompt to update if a newer version exists
+mf update
+mayfly update
+
+# Check release status without updating
+mf update --check
+
+# Automatically accept update prompt (ideal for non-interactive scripts)
+mf update --yes
+```
+
+---
+
+## Description
+
+The `update` command queries the GitHub Releases API for the latest release:
+
+1. Compares the remote tag (e.g. `v0.0.2`) with the local binary version (`v0.0.1`) using strict semantic versioning (`major.minor.patch`).
+2. If your version is up to date, it displays:
+   ```text
+   [OK] MayFly is up to date (v0.0.1 is the latest release).
+   ```
+3. If a higher release version exists, it displays the release notes, download URL, and asks for your confirmation:
+   ```text
+   A newer release of MayFly is available:
+     Current: v0.0.1
+     Latest:  v0.0.2
+
+   Release Notes:
+     - Enhanced process isolation
+     - Performance improvements
+
+   Would you like to update to v0.0.2 now? [y/N]: 
+   ```
+4. If confirmed (`y`), it safely downloads the verified platform binary, replaces `mayfly` and `mf` in your PATH, and verifies execution.
+
+---
+
+## Options & Flags
+
+| Flag | Shorthand | Description |
+| :--- | :--- | :--- |
+| `--check` | `-c` | Only check if an update is available without prompting to install |
+| `--yes` | `-y` | Automatically accept the update confirmation prompt |
+| `-h`, `--help` | | Show update command help and options |

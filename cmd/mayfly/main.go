@@ -133,6 +133,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "completion":
 		return cmdCompletion(subArgs, stdout, stderr)
 
+	case "update":
+		return cmdUpdate(ctx, subArgs, stdin, stdout, stderr)
+
 	case "uninstall":
 		return cmdUninstall(stdin, stdout)
 
@@ -162,6 +165,7 @@ Usage:
   mayfly backup [FILE]                Export encrypted vault backup snapshot
   mayfly restore <FILE>               Restore vault and projects from backup snapshot
   mayfly migrate <OLD> <NEW>          Update project identity when directory moves
+  mayfly update [--check] [--yes]     Check for newer releases and prompt to update
   mayfly completion <SHELL>           Generate autocompletion script (bash, zsh, fish)
   mayfly uninstall                    Cleanly uninstall binaries and remove data
   mayfly version                      Show version information
@@ -173,6 +177,7 @@ Short alias:
     mf set STRIPE_KEY                 Enter secret value in clean ephemeral alt-screen
     mf get STRIPE_KEY --clip          Copy secret directly to clipboard
     mf import .env                    Migrate existing .env file into vault
+    mf update                         Check for latest version and upgrade
     mf rotate-password                Rotate vault encryption master password
     mf                                Open TUI dashboard`)
 }

@@ -13,6 +13,7 @@ import (
 	"mayfly/pkg/application"
 	"mayfly/pkg/domain"
 	"mayfly/pkg/tui/terminal"
+	"mayfly/pkg/updater"
 )
 
 func cmdInit(ctx context.Context, svc *application.Service, args []string, stdout, stderr io.Writer) int {
@@ -546,6 +547,73 @@ func cmdUninstall(stdin io.Reader, stdout io.Writer) int {
 	fmt.Fprintln(stdout, "[OK] Removed mayfly and mf binaries.")
 	fmt.Fprintln(stdout, "[OK] Removed ~/.mayfly directory and all encrypted vaults.")
 	fmt.Fprintln(stdout, "MayFly has been completely and cleanly uninstalled from your system.")
+	return 0
+}
+
+func cmdUpdate(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	checkOnly := false
+	forceYes := false
+
+	for _, arg := range args {
+		if arg == "--check" || arg == "-c" {
+			checkOnly = true
+		} else if arg == "--yes" || arg == "-y" {
+			forceYes = true
+		}
+	}
+
+	fmt.Fprintf(stdout, "Checking for MayFly updates (current: v%s)...\n", domain.Version)
+	rel, isNewer, err := updater.CheckForUpdates(ctx, "")
+	if err != nil {
+		fmt.Fprintf(stderr, "mayfly: unable to check for updates: %v\n", err)
+		return 1
+	}
+
+	if !isNewer {
+		fmt.Fprintf(stdout, "[OK] MayFly is up to date (v%s is the latest release).\n", domain.Version)
+		return 0
+	}
+
+	fmt.Fprintf(stdout, "\nA newer release of MayFly is available:\n")
+	fmt.Fprintf(stdout, "  Current: v%s\n", domain.Version)
+	fmt.Fprintf(stdout, "  Latest:  %s (%s)\n", rel.TagName, rel.Name)
+	if rel.HTMLURL != "" {
+		fmt.Fprintf(stdout, "  URL:     %s\n", rel.HTMLURL)
+	}
+
+	if strings.TrimSpace(rel.Body) != "" {
+		fmt.Fprintf(stdout, "\nRelease Notes:\n%s\n", strings.TrimSpace(rel.Body))
+	}
+
+	if checkOnly {
+		return 0
+	}
+
+	f, isFile := stdin.(*os.File)
+	isTerm := isFile && terminal.IsTerminal(f)
+
+	if !forceYes {
+		if !isTerm && os.Getenv("MAYFLY_FORCE_NONINTERACTIVE") != "1" && !isTesting() {
+			fmt.Fprintln(stdout, "\nTo update, run 'mayfly update' interactively or use 'mayfly update --yes'.")
+			return 0
+		}
+
+		fmt.Fprintf(stdout, "\nWould you like to update to %s now? [y/N]: ", rel.TagName)
+		resp, _ := readLine(stdin)
+		clean := strings.ToLower(strings.TrimSpace(resp))
+		if clean != "y" && clean != "yes" {
+			fmt.Fprintln(stdout, "Update postponed. (Run 'mayfly update' anytime).")
+			return 0
+		}
+	}
+
+	fmt.Fprintf(stdout, "\nDownloading and installing %s...\n", rel.TagName)
+	if err := updater.PerformUpdate(ctx); err != nil {
+		fmt.Fprintf(stderr, "mayfly: update failed: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(stdout, "[OK] MayFly successfully updated to %s!\n", rel.TagName)
 	return 0
 }
 
