@@ -42,11 +42,12 @@ jobs:
 
       - name: Test (Linux & Windows)
         if: matrix.os != 'macos-latest'
-        run: go test -race -timeout 180s ./...
+        run: go test -v -race -timeout 180s ./...
 
       - name: Test (macOS)
         if: matrix.os == 'macos-latest'
-        run: go test -timeout 180s ./...
+        run: go test -v -timeout 180s ./...
+
 
 
 
