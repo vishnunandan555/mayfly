@@ -13,14 +13,14 @@
   <a href="go.mod"><img src="https://img.shields.io/badge/go-1.22+-00ADD8?style=flat&logo=go" alt="Go Version" /></a>
   <a href="STDLIB.md"><img src="https://img.shields.io/badge/dependencies-0%20external-brightgreen" alt="Zero Dependencies" /></a>
   <a href=".zero-dep.toml"><img src="https://img.shields.io/badge/Track-E%20%7C%20Security%20%26%20Crypto-blueviolet" alt="Track" /></a>
-  <a href="#testing--verification"><img src="https://img.shields.io/badge/build-reproducible%20(+5%20pts)-success" alt="Reproducible Build" /></a>
+  <a href="#testing--verification"><img src="https://img.shields.io/badge/build-reproducible-success" alt="Reproducible Build" /></a>
   <a href="install.sh"><img src="https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue" alt="Platforms" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-orange" alt="License" /></a>
 </p>
 
 ---
 
-## 💡 The Problem MayFly Solves
+## The Problem MayFly Solves
 
 Most developers store secrets in plaintext `.env` files inside their project directories:
 ```env
@@ -35,7 +35,7 @@ OPENAI_API_KEY=sk-proj-1234567890
 
 ---
 
-## ⚡ Quick Install
+## Quick Install
 
 ### Linux & macOS (Darwin):
 ```bash
@@ -58,7 +58,7 @@ make install
 
 ---
 
-## 🎮 How to Use MayFly
+## How to Use MayFly
 
 MayFly provides both **`mayfly`** and a short alias **`mf`**.
 
@@ -131,7 +131,7 @@ mf migrate /old/path /new/path
 
 ---
 
-## 🏗️ Architecture: Recreated From Scratch
+## Architecture: Recreated From Scratch
 
 MayFly imports **zero third-party packages**. The entire system was hand-rolled from standard library primitives:
 
@@ -151,11 +151,11 @@ mayfly/
 └── Makefile                    # One-command build & testing
 ```
 
-See [STDLIB.md](STDLIB.md) for the complete 11-entry substitution matrix.
+See [STDLIB.md](STDLIB.md) for the complete 12-entry substitution matrix.
 
 ---
 
-## 🔒 Security Model & Operational Notes
+## Security Model & Operational Notes
 
 | Security Property | Implementation Details |
 |---|---|
@@ -174,7 +174,7 @@ See [STDLIB.md](STDLIB.md) for the complete 11-entry substitution matrix.
 
 ---
 
-## 🧪 Testing & Verification
+## Testing & Verification
 
 Run the full automated test suite (including race detector):
 ```bash
@@ -201,6 +201,6 @@ GOOS=windows go build ./...
 
 ---
 
-## 📄 License
+## License
 
 AGPL-3.0 License. See [LICENSE](LICENSE) for details.
