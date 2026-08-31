@@ -40,6 +40,7 @@ var tokenPatterns = []struct {
 	message  string
 	regex    *regexp.Regexp
 }{
+	// ── Major Cloud & API Providers ──────────────────────────────────────────
 	{
 		category: "github-token",
 		severity: domain.SeverityCritical,
@@ -70,13 +71,100 @@ var tokenPatterns = []struct {
 		message:  "Private Encryption Key Block detected",
 		regex:    regexp.MustCompile(`-----BEGIN (RSA|EC|DSA|OPENSSH|PRIVATE) KEY-----`),
 	},
+	// ── Slack ────────────────────────────────────────────────────────────────
+	{
+		category: "slack-bot-token",
+		severity: domain.SeverityCritical,
+		message:  "Slack Bot Token detected",
+		regex:    regexp.MustCompile(`\bxoxb-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24,32}\b`),
+	},
+	{
+		category: "slack-user-token",
+		severity: domain.SeverityCritical,
+		message:  "Slack User Token detected",
+		regex:    regexp.MustCompile(`\bxoxp-[0-9]{10,13}-[0-9]{10,13}-[0-9]{10,13}-[a-fA-F0-9]{32,64}\b`),
+	},
+	// ── OpenAI / Anthropic ───────────────────────────────────────────────────
+	{
+		category: "openai-key",
+		severity: domain.SeverityCritical,
+		message:  "OpenAI API Key detected",
+		regex:    regexp.MustCompile(`\bsk-proj-[A-Za-z0-9\-_]{48,256}\b`),
+	},
+	{
+		category: "anthropic-key",
+		severity: domain.SeverityCritical,
+		message:  "Anthropic API Key detected",
+		regex:    regexp.MustCompile(`\bsk-ant-[A-Za-z0-9\-_]{80,256}\b`),
+	},
+	// ── Communications ───────────────────────────────────────────────────────
+	{
+		category: "twilio-sid",
+		severity: domain.SeverityCritical,
+		message:  "Twilio Account SID detected",
+		regex:    regexp.MustCompile(`\bAC[a-z0-9]{32}\b`),
+	},
+	{
+		category: "sendgrid-key",
+		severity: domain.SeverityCritical,
+		message:  "SendGrid API Key detected",
+		regex:    regexp.MustCompile(`\bSG\.[A-Za-z0-9\-_]{22}\.[A-Za-z0-9\-_]{43}\b`),
+	},
+	{
+		category: "mailgun-key",
+		severity: domain.SeverityCritical,
+		message:  "Mailgun API Key detected",
+		regex:    regexp.MustCompile(`\bkey-[0-9a-zA-Z]{32}\b`),
+	},
+	// ── Tokens & Auth ────────────────────────────────────────────────────────
+	{
+		category: "jwt-token",
+		severity: domain.SeverityWarning,
+		message:  "JWT Token detected (may contain sensitive claims)",
+		regex:    regexp.MustCompile(`\beyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\b`),
+	},
+	{
+		category: "bearer-token",
+		severity: domain.SeverityWarning,
+		message:  "Hardcoded Bearer token detected",
+		regex:    regexp.MustCompile(`(?i)Bearer\s+[A-Za-z0-9\-_\.]{20,256}`),
+	},
+	{
+		category: "npm-auth-token",
+		severity: domain.SeverityCritical,
+		message:  "npm registry auth token detected in config",
+		regex:    regexp.MustCompile(`//[a-z0-9\.\-]+\.npmjs\.org/:_authToken=[A-Za-z0-9\-_\.]{20,}`),
+	},
+	// ── Database ─────────────────────────────────────────────────────────────
+	{
+		category: "db-connection-string",
+		severity: domain.SeverityWarning,
+		message:  "Database connection string with embedded credentials detected",
+		regex:    regexp.MustCompile(`(?i)(postgres|postgresql|mysql|mongodb|redis)://[^:@\s]+:[^@\s]+@`),
+	},
+	// ── Docker ───────────────────────────────────────────────────────────────
+	{
+		category: "dockerfile-secret-env",
+		severity: domain.SeverityWarning,
+		message:  "Hardcoded secret in Dockerfile ENV instruction detected",
+		regex:    regexp.MustCompile(`(?i)ENV\s+(SECRET|API_KEY|TOKEN|PASSWORD|PASSWD|PRIVATE_KEY)\s*=\s*\S{8,}`),
+	},
+	// ── Generic Credential Assignments ───────────────────────────────────────
 	{
 		category: "token-assignment",
 		severity: domain.SeverityWarning,
 		message:  "Hardcoded credential / secret variable assignment detected",
 		regex:    regexp.MustCompile(`(?i)(api[_-]?key|secret[_-]?key|auth[_-]?token|db[_-]?pass|password)\s*[:=]\s*["'][^"'\s]{8,}["']`),
 	},
+	// ── pip.conf with credentials ─────────────────────────────────────────────
+	{
+		category: "pip-conf-credentials",
+		severity: domain.SeverityCritical,
+		message:  "pip.conf with embedded credentials detected",
+		regex:    regexp.MustCompile(`(?i)index-url\s*=\s*https?://[^:@\s]+:[^@\s]+@`),
+	},
 }
+
 
 type Scanner struct {
 	skipPaths map[string]bool
@@ -131,7 +219,7 @@ func (s *Scanner) Scan(ctx context.Context, rootDir string) ([]domain.ScanFindin
 			return nil
 		}
 
-// Check dangerous file names (.env, credentials, private keys), excluding template/example files
+		// Check dangerous file names (.env, credentials, private keys), excluding template/example files
 		if isDangerousConfigFile(base) {
 			findings = append(findings, domain.ScanFinding{
 				Path:     relPath,
@@ -140,6 +228,21 @@ func (s *Scanner) Scan(ctx context.Context, rootDir string) ([]domain.ScanFindin
 				Severity: domain.SeverityCritical,
 				Category: "plaintext-env-file",
 				Message:  "Plaintext secrets configuration file found on disk",
+			})
+		}
+
+
+
+		// Check dangerous file extensions (.pem, .key, .p12, .pfx)
+		ext := strings.ToLower(filepath.Ext(base))
+		if ext == ".pem" || ext == ".key" || ext == ".p12" || ext == ".pfx" {
+			findings = append(findings, domain.ScanFinding{
+				Path:     relPath,
+				Line:     1,
+				Column:   1,
+				Severity: domain.SeverityCritical,
+				Category: "certificate-key-file",
+				Message:  "Private key or certificate file found on disk",
 			})
 		}
 
@@ -211,6 +314,23 @@ func (s *Scanner) scanFile(fullPath, relPath string) ([]domain.ScanFinding, erro
 					}
 				}
 
+				// For database connection strings, filter out safe localhost loopback URLs and dummy placeholders:
+				if p.category == "db-connection-string" {
+					lowerLine := strings.ToLower(line)
+					if strings.Contains(lowerLine, "@localhost") ||
+						strings.Contains(lowerLine, "@127.0.0.1") ||
+						strings.Contains(lowerLine, "@0.0.0.0") ||
+						strings.Contains(lowerLine, ":password@") ||
+						strings.Contains(lowerLine, ":pass@") ||
+						strings.Contains(lowerLine, ":changeme@") ||
+						strings.Contains(lowerLine, ":your_password@") ||
+						strings.Contains(lowerLine, ":your-password@") ||
+						strings.Contains(lowerLine, ":secret@") {
+						continue
+					}
+				}
+
+
 				findings = append(findings, domain.ScanFinding{
 					Path:     relPath,
 					Line:     lineNum,
@@ -250,10 +370,13 @@ func isDangerousConfigFile(filename string) bool {
 		lower == "id_ed25519" ||
 		lower == "id_ecdsa" ||
 		lower == "id_dsa" ||
+		lower == "pip.conf" ||
+		lower == ".npmrc" ||
 		lower == "service-account.json" ||
 		lower == "service_account.json" {
 		return true
 	}
+
 	return false
 }
 

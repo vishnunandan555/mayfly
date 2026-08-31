@@ -1,12 +1,40 @@
 ---
 title: Security Model & Cryptography
-description: Technical breakdown of MayFly's cryptographic primitives, key derivation, and authenticated binary container format.
+description: Technical breakdown of MayFly's cryptographic primitives, key derivation, authenticated binary container format, and memory guarantees.
 icon: ShieldCheck
 ---
 
 ## Cryptographic Primitives
 
 MayFly enforces authenticated, tamper-resistant encryption at rest using standard, audited cryptographic algorithms implemented exclusively through the Go standard library (`crypto/aes`, `crypto/cipher`, `crypto/sha256`, `crypto/hmac`, `crypto/rand`).
+
+```mermaid
+flowchart TD
+    subgraph MasterKeyDerivation["1. Master Key Derivation (RFC 8018)"]
+        A[User Master Password] --> B[PBKDF2-HMAC-SHA256]
+        C[32-Byte Cryptographic Salt] --> B
+        D["Iteration Count: 600,000 rounds"] --> B
+        B --> E[256-bit AES Master Key]
+    end
+
+    subgraph AuthenticatedEncryption["2. Authenticated Encryption (AES-256-GCM)"]
+        E --> F[AES-256-GCM AEAD Cipher]
+        G[12-Byte Cryptographic Nonce] --> F
+        H["15-Byte Header (AAD)"] --> F
+        I[JSON Project Secrets Payload] --> J[GZIP Compression]
+        J --> F
+        F --> K[Encrypted Ciphertext + 16B Auth Tag]
+    end
+
+    subgraph AtomicStorage["3. Crash-Safe Atomic Persistence"]
+        H --> L["Write to Temp File (~/.mayfly/vault.enc.tmp.<pid>)"]
+        C --> L
+        G --> L
+        K --> L
+        L --> M["fsync() to Disk"]
+        M --> N["Atomic os.Rename() -> ~/.mayfly/vault.enc (0600 POSIX)"]
+    end
+```
 
 ---
 
@@ -26,7 +54,7 @@ EncryptionKey = PBKDF2(
 
 ### Parameters
 - **Salt Length**: 32 bytes generated via `crypto/rand.Read`.
-- **Iteration Count**: Default `600,000` rounds (aligned with OWASP recommendations for PBKDF2-HMAC-SHA256).
+- **Iteration Count**: Default `600,000` rounds (aligned with OWASP recommendations for PBKDF2-HMAC-SHA256 to resist GPU cracking rigs).
 - **Key Output Size**: 32 bytes (AES-256).
 
 ---
@@ -37,10 +65,10 @@ Secrets are encrypted using **AES-256 in Galois/Counter Mode (GCM)**, providing 
 
 ### Nonce Generation
 - A fresh, cryptographically secure 12-byte (96-bit) nonce is generated via `crypto/rand` for **every write operation**.
-- Nonce reuse is strictly prohibited.
+- Nonce reuse is strictly prohibited and mathematically prevented.
 
 ### Associated Data (AEAD)
-The 15-byte container header is passed as Authenticated Additional Data (AAD) into the GCM cipher. Any tampering with container version bytes, iteration counts, or salt lengths will cause authentication tag verification to fail during decryption.
+The 15-byte container header is passed as Authenticated Additional Data (AAD) into the GCM cipher. Any tampering with container version bytes, iteration counts, or salt lengths will cause authentication tag verification to fail during decryption before any ciphertext is parsed.
 
 ---
 
@@ -68,6 +96,16 @@ The vault is stored at `~/.mayfly/vault.enc` with strict POSIX permissions (`060
 
 ---
 
+## Memory Zeroization & Safety Guarantees
+
+When secrets are loaded into memory:
+1. **Volatile RAM Only**: Decrypted secrets reside solely in byte slices allocated in user-space RAM.
+2. **Buffer Overwriting**: When a process finishes or when the vault auto-locks, memory buffers are explicitly wiped with zero bytes.
+3. **`runtime.KeepAlive()` Protection**: Go's compiler optimizes away writes to memory buffers if it determines the variable is not read again. MayFly wraps memory clearing with `runtime.KeepAlive` to prevent compiler dead-store elimination.
+4. **Echo Suppression**: Master password input uses low-level `termios` ioctl calls (`TCSETS` with `ECHO` disabled), ensuring master passwords never appear on stdout or terminal scrollback buffers.
+
+---
+
 ## Atomic Write Guarantee
 
 To prevent corruption during concurrent operations or sudden system restarts, all vault modifications execute via atomic file replacement:
@@ -76,3 +114,4 @@ To prevent corruption during concurrent operations or sudden system restarts, al
 2. The encrypted header, salt, nonce, and ciphertext are written.
 3. `file.Sync()` flushes file buffers to underlying physical storage.
 4. An atomic rename (`os.Rename`) overwrites `~/.mayfly/vault.enc`.
+

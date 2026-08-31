@@ -210,4 +210,132 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 	if code != 0 || !strings.Contains(stdout, "mayfly update") {
 		t.Fatalf("help failed: code=%d, err=%s, out=%s", code, stderr, stdout)
 	}
+
+	// 17. Test 'set --clip'
+	code, stdout, stderr = executeMayfly(t, []string{"set", "CLIP_VAR", "--clip", "clipval123"}, "newsecretpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "Secret CLIP_VAR saved") {
+		t.Fatalf("set --clip failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 18. Test 'env' in various shells (bash, fish, powershell, json)
+	code, stdout, stderr = executeMayfly(t, []string{"env"}, "newsecretpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "export STRIPE_KEY=") {
+		t.Fatalf("env bash failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	code, stdout, stderr = executeMayfly(t, []string{"env", "--shell", "fish"}, "newsecretpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "set -x STRIPE_KEY") {
+		t.Fatalf("env fish failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	code, stdout, stderr = executeMayfly(t, []string{"env", "--shell", "powershell"}, "newsecretpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "$env:STRIPE_KEY =") {
+		t.Fatalf("env powershell failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	code, stdout, stderr = executeMayfly(t, []string{"env", "--shell", "json"}, "newsecretpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "\"STRIPE_KEY\":") {
+		t.Fatalf("env json failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	code, _, stderr = executeMayfly(t, []string{"env", "--shell", "invalid_shell"}, "newsecretpass\n", projDir)
+	if code == 0 || !strings.Contains(stderr, "unsupported shell") {
+		t.Fatalf("expected error on invalid shell: code=%d, err=%s", code, stderr)
+	}
+
+	// 19. Test 'status' and 'doctor'
+	code, stdout, stderr = executeMayfly(t, []string{"status"}, "", projDir)
+	if code != 0 || !strings.Contains(stdout, "MayFly Status") {
+		t.Fatalf("status failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	code, stdout, stderr = executeMayfly(t, []string{"doctor"}, "", projDir)
+	if code != 0 || !strings.Contains(stdout, "MayFly Status") {
+		t.Fatalf("doctor failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 20. Test 'check' (integrity verification)
+	code, stdout, stderr = executeMayfly(t, []string{"check"}, "", projDir)
+	if code != 0 || !strings.Contains(stdout, "audit log hash chain verified") {
+		t.Fatalf("check failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 21. Test 'template' rendering (including values with '{{' syntax)
+	tplFile := filepath.Join(projDir, "app.config.template")
+	if err := os.WriteFile(tplFile, []byte("key = \"{{ STRIPE_KEY }}\"\nclip = \"{{ CLIP_VAR }}\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	outTplFile := filepath.Join(projDir, "app.config")
+	code, stdout, stderr = executeMayfly(t, []string{"template", tplFile, "--output", outTplFile}, "newsecretpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "Rendered template written") {
+		t.Fatalf("template failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+	tplData, err := os.ReadFile(outTplFile)
+	if err != nil || !strings.Contains(string(tplData), "key = \"sk_live_1234567890\"") {
+		t.Fatalf("template content unexpected: %s", string(tplData))
+	}
+
+	// 22. Test 'diff' between two projects
+	projDir2 := filepath.Join(t.TempDir(), "test-app-2")
+	_ = os.MkdirAll(projDir2, 0755)
+	executeMayfly(t, []string{"init", "-path", projDir2}, "", "")
+	executeMayfly(t, []string{"set", "STRIPE_KEY", "different_val"}, "newsecretpass\n", projDir2)
+	executeMayfly(t, []string{"set", "PROJ2_ONLY_KEY", "val"}, "newsecretpass\n", projDir2)
+
+	// 1-arg diff: current vs projDir2
+	code, stdout, stderr = executeMayfly(t, []string{"diff", projDir2}, "newsecretpass\n", projDir)
+	if code != 0 || !strings.Contains(stdout, "In both") || !strings.Contains(stdout, "Only in B") {
+		t.Fatalf("diff 1-arg failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 2-arg diff: projDir vs projDir2
+	code, stdout, stderr = executeMayfly(t, []string{"diff", projDir, projDir2}, "newsecretpass\n", tempHome)
+	if code != 0 || !strings.Contains(stdout, "In both") {
+		t.Fatalf("diff 2-arg failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 23. Test git hook installation and uninstallation
+	gitDir := filepath.Join(projDir, ".git")
+	_ = os.MkdirAll(filepath.Join(gitDir, "hooks"), 0755)
+	code, stdout, stderr = executeMayfly(t, []string{"install-hook"}, "", projDir)
+	if code != 0 || !strings.Contains(stdout, "Pre-commit hook installed") {
+		t.Fatalf("install-hook failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	code, stdout, stderr = executeMayfly(t, []string{"uninstall-hook"}, "", projDir)
+	if code != 0 || !strings.Contains(stdout, "Pre-commit hook removed") {
+		t.Fatalf("uninstall-hook failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 24. Test --password-stdin flag (both before and after subcommand)
+	code, stdout, stderr = executeMayfly(t, []string{"--password-stdin", "get", "STRIPE_KEY"}, "newsecretpass\n", projDir)
+	if code != 0 || strings.TrimSpace(stdout) != "sk_live_1234567890" {
+		t.Fatalf("--password-stdin before subcmd failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	code, stdout, stderr = executeMayfly(t, []string{"get", "STRIPE_KEY", "--password-stdin"}, "newsecretpass\n", projDir)
+	if code != 0 || strings.TrimSpace(stdout) != "sk_live_1234567890" {
+		t.Fatalf("--password-stdin after subcmd failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 25. Test scan --json (detects remaining .env file with exit code 1)
+	code, stdout, stderr = executeMayfly(t, []string{"scan", "--json"}, "", projDir)
+	if code != 1 || !strings.Contains(stdout, "plaintext-env-file") {
+		t.Fatalf("expected scan --json to detect .env with code 1, got code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// Remove .env and verify clean scan returns code 0 and "[]"
+	_ = os.Remove(envFile)
+	code, stdout, stderr = executeMayfly(t, []string{"scan", "--json"}, "", projDir)
+	if code != 0 || !strings.Contains(stdout, "[]") {
+		t.Fatalf("scan --json after cleanup failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
+
+	// 26. Test audit --json and audit --tail
+	code, stdout, stderr = executeMayfly(t, []string{"audit", "--json", "--tail", "5"}, "", projDir)
+	if code != 0 || !strings.Contains(stdout, "\"action\":") {
+		t.Fatalf("audit --json failed: code=%d, err=%s, out=%s", code, stderr, stdout)
+	}
 }
+
+

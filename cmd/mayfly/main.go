@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+
 	"mayfly/pkg/application"
 	"mayfly/pkg/audit"
 	"mayfly/pkg/domain"
@@ -16,6 +17,7 @@ import (
 	"mayfly/pkg/vault"
 )
 
+
 func main() {
 	code := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
 	os.Exit(code)
@@ -23,8 +25,22 @@ func main() {
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	ctx := context.Background()
+	passwordFromStdin = false
+
+	// Extract --password-stdin anywhere in args before subcommand dispatch.
+	// This ensures commands like `mayfly run --password-stdin npm start` or `mayfly set KEY --password-stdin` work seamlessly.
+	var cleanArgs []string
+	for _, arg := range args {
+		if arg == "--password-stdin" {
+			passwordFromStdin = true
+		} else {
+			cleanArgs = append(cleanArgs, arg)
+		}
+	}
+	args = cleanArgs
 
 	// Initialize project workspace registry
+
 	reg, err := project.NewRegistry("")
 	if err != nil {
 		fmt.Fprintf(stderr, "mayfly: failed to initialize project registry: %v\n", err)
@@ -48,17 +64,22 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if sErr != nil {
 		fmt.Fprintf(stderr, "mayfly: warning: scanner initialization failed: %v\n", sErr)
 	}
+	metaStore, mErr := project.NewMetaStore("")
+	if mErr != nil {
+		fmt.Fprintf(stderr, "mayfly: warning: vault meta store initialization failed: %v\n", mErr)
+	}
 
 	svc := application.NewService(application.Dependencies{
-		Projects: reg,
-		Vault:    storage,
-		Executor: execEngine,
-		Auditor:  auditLog,
-		Scanner:  leakScanner,
+		Projects:  reg,
+		Vault:     storage,
+		Executor:  execEngine,
+		Auditor:   auditLog,
+		Scanner:   leakScanner,
+		MetaStore: metaStore,
 	})
 
-	// If no arguments provided, launch the interactive global dashboard directly
 	if len(args) == 0 {
+
 		if err := tui.Run(svc, tui.Options{}); err != nil {
 			fmt.Fprintf(stderr, "mayfly: tui error: %v\n", err)
 			return 1
@@ -115,6 +136,27 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "audit":
 		return cmdAudit(ctx, svc, subArgs, stdout, stderr)
 
+	case "env":
+		return cmdEnv(ctx, svc, subArgs, stdin, stdout, stderr)
+
+	case "status", "doctor":
+		return cmdStatus(ctx, svc, stdout, stderr)
+
+	case "check":
+		return cmdCheck(ctx, svc, stdout, stderr)
+
+	case "template":
+		return cmdTemplate(ctx, svc, subArgs, stdin, stdout, stderr)
+
+	case "diff":
+		return cmdDiff(ctx, svc, subArgs, stdin, stdout, stderr)
+
+	case "install-hook":
+		return cmdInstallHook(subArgs, stdout, stderr)
+
+	case "uninstall-hook":
+		return cmdUninstallHook(stdout, stderr)
+
 	case "backup":
 		return cmdBackup(ctx, svc, subArgs, stdout, stderr)
 
@@ -153,15 +195,24 @@ Usage:
   mayfly                              Launch interactive Global TUI Dashboard (Project Grid)
   mayfly c, mayfly current            Launch TUI scoped directly to current project
   mayfly init [-path DIR]             Initialize project in current directory or target path
-  mayfly set <NAME> [VALUE]           Add or update an encrypted secret (alt-screen if interactive)
+  mayfly set <NAME> [--clip] [VALUE]  Add or update an encrypted secret (alt-screen if interactive)
   mayfly get <NAME> [--clip]          Output decrypted secret or copy to clipboard (-c)
   mayfly list [--json]                List secret keys for the current project
   mayfly delete <NAME>                Remove a secret from the vault
   mayfly import [FILE] [--delete]     Import secrets from .env file into vault (default: .env)
   mayfly rotate-password              Re-encrypt vault with a new master password
   mayfly run <COMMAND> [ARGS...]      Explicit process execution alias
-  mayfly scan [DIR]                   Scan codebase for plaintext secret leaks (.mayflyignore supported)
-  mayfly audit [verify]               View or cryptographically verify audit log
+  mayfly env [--shell bash|fish|json] Export secrets as shell environment variables
+  mayfly status                       Show vault health, project count, and audit summary
+  mayfly check                        Verify vault, audit log, and project registry integrity
+  mayfly scan [DIR] [--json] [--severity CRITICAL|WARNING]
+                                      Scan codebase for plaintext secret leaks
+  mayfly audit [verify] [--json] [--tail N]
+                                      View or cryptographically verify audit log
+  mayfly install-hook                 Install git pre-commit hook to run mf scan on commit
+  mayfly uninstall-hook               Remove the mayfly pre-commit hook
+  mayfly template <FILE> [--output F] Render a config template with secrets injected
+  mayfly diff [PATH_A] [PATH_B]       Compare secret keys between two projects
   mayfly backup [FILE]                Export encrypted vault backup snapshot
   mayfly restore <FILE>               Restore vault and projects from backup snapshot
   mayfly migrate <OLD> <NEW>          Update project identity when directory moves
@@ -170,6 +221,14 @@ Usage:
   mayfly uninstall                    Cleanly uninstall binaries and remove data
   mayfly version                      Show version information
   mayfly help                         Show this help message
+
+Global Flags:
+  --password-stdin                    Read vault password from stdin (safer than env var for CI)
+
+CI / Automation:
+  echo "$VAULT_PASS" | mayfly --password-stdin run npm start
+  # Preferred over: MAYFLY_VAULT_PASSWORD=$VAULT_PASS mayfly run npm start
+  # (env vars are readable via /proc/<pid>/environ by same-user processes)
 
 Short alias:
   All commands work with 'mf' as well:
