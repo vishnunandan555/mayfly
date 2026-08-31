@@ -61,6 +61,7 @@ func ResolveDirectory(path string) (string, error) {
 
 // GenerateID produces a deterministic SHA-256 project ID from device, inode, and canonical path.
 func GenerateID(device, inode uint64, canonicalPath string) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%d:%d:%s", device, inode, canonicalPath)))
+	sum := sha256.Sum256(fmt.Appendf(nil, "%d:%d:%s", device, inode, canonicalPath))
 	return "project-" + hex.EncodeToString(sum[:])
 }
+
