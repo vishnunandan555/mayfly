@@ -137,9 +137,9 @@ echo ""
 
 ALIAS_CHOICE=""
 if [ -t 0 ]; then
-    read -p "Select option [1/2/3]: " -r ALIAS_CHOICE 2>/dev/null || ALIAS_CHOICE=1
+    read -t 5 -p "Select option [1/2/3]: " -r ALIAS_CHOICE 2>/dev/null || ALIAS_CHOICE=1
 elif [ -e /dev/tty ] && [ -r /dev/tty ]; then
-    read -p "Select option [1/2/3]: " -r ALIAS_CHOICE < /dev/tty 2>/dev/null || ALIAS_CHOICE=1
+    read -t 5 -p "Select option [1/2/3]: " -r ALIAS_CHOICE < /dev/tty 2>/dev/null || ALIAS_CHOICE=1
 else
     ALIAS_CHOICE=1
 fi
@@ -256,9 +256,9 @@ case ":$PATH:" in
             echo "Note: '${INSTALL_DIR}' is not currently in your system PATH."
             ADD_PATH_RESP=""
             if [ -t 0 ]; then
-                read -p "Add '${INSTALL_DIR}' to $(basename "$RC_FILE")? [Y/n]: " -r ADD_PATH_RESP 2>/dev/null || ADD_PATH_RESP="y"
+                read -t 5 -p "Add '${INSTALL_DIR}' to $(basename "$RC_FILE")? [Y/n]: " -r ADD_PATH_RESP 2>/dev/null || ADD_PATH_RESP="y"
             elif [ -e /dev/tty ] && [ -r /dev/tty ]; then
-                read -p "Add '${INSTALL_DIR}' to $(basename "$RC_FILE")? [Y/n]: " -r ADD_PATH_RESP < /dev/tty 2>/dev/null || ADD_PATH_RESP="y"
+                read -t 5 -p "Add '${INSTALL_DIR}' to $(basename "$RC_FILE")? [Y/n]: " -r ADD_PATH_RESP < /dev/tty 2>/dev/null || ADD_PATH_RESP="y"
             else
                 ADD_PATH_RESP="y"
             fi
