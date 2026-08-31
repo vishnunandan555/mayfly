@@ -3,6 +3,22 @@
 All notable changes to MayFly are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.5] — 2026-08-31
+
+### Added
+- **Zero-History Ephemeral TUI Secret Viewer (`mf get`)**: When running in an interactive terminal, `mf get <KEY>` now launches an isolated alt-screen ephemeral viewer. Secrets are never printed to terminal scrollback or bash history; pressing `C` copies the secret to the clipboard and `Q`/`Esc` immediately zeroes memory and restores the terminal canvas. Plain stdout output is preserved when piped or invoked in non-interactive / CI scripts.
+- **Comprehensive Features Matrix (`FEATURES.md`)**: Complete architectural specification document covering memory lifecycle diagrams, security guarantees, KDF iteration benchmarks, hardware inode identity mapping, and complete CLI command references.
+- **Unified Build System & Versioning**: Integrated `-ldflags="-s -w -buildid= -X mayfly/pkg/domain.Version=..."` consistently across `Makefile`, `install.sh`, `install.ps1`, and GitHub Actions release pipelines.
+- **Multi-Platform Release Artifacts**: Added `make release-artifacts` target with automated cryptographic `checksums.txt` generation and verification.
+- **Comprehensive Documentation Hub**: Complete interactive Fumadocs / Next.js documentation portal with OpenGraph cards, LLM reference guides (`llms.txt`), and universal framework integration walkthroughs.
+
+### Security
+- Cryptographic SHA-256 binary verification enforced across both `install.sh` and `install.ps1`.
+- Verified bit-for-bit reproducible build determinism (`make reproducible`).
+- Confirmed 0 external runtime dependencies (`make deps-proof`).
+
+---
+
 ## [0.0.4] — 2026-08-31
 
 ### Fixed

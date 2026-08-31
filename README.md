@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/vishnunandan555/mayfly/releases/tag/v0.0.5"><img src="https://img.shields.io/badge/version-v0.0.5-blue?style=flat" alt="Version v0.0.5" /></a>
   <a href="go.mod"><img src="https://img.shields.io/badge/go-1.22+-00ADD8?style=flat&logo=go" alt="Go Version" /></a>
   <a href="STDLIB.md"><img src="https://img.shields.io/badge/dependencies-0%20external-brightgreen" alt="Zero Dependencies" /></a>
   <a href=".zero-dep.toml"><img src="https://img.shields.io/badge/Track-E%20%7C%20Security%20%26%20Crypto-blueviolet" alt="Track" /></a>
@@ -25,6 +26,7 @@
 ---
 
 <p align="center">
+  <a href="FEATURES.md"><strong>Complete Features Matrix →</strong></a> |
   <a href="docs/"><strong>Explore Full Documentation →</strong></a> |
   <a href="STDLIB.md"><strong>Zero-Dependency Matrix (STDLIB.md) →</strong></a> |
   <a href="deps-proof.txt"><strong>Dependency Verification Proof →</strong></a>
@@ -266,6 +268,7 @@ Explore the full interactive documentation, security architecture, and language 
 
 | Guide / Reference | Description | Link |
 | :--- | :--- | :--- |
+| 📋 **Features Matrix** | Complete capability matrix, security guarantees, & CLI specifications | [Features Specification](FEATURES.md) |
 | 🚀 **Quickstart** | 2-minute setup, installation, and first secret injection | [Quickstart Guide](docs/content/docs/quickstart.mdx) |
 | 🛡️ **Why MayFly & Threat Model** | In-depth analysis of supply-chain attacks & memory isolation | [Security Architecture](docs/content/docs/why-mayfly.mdx) |
 | 🧠 **Core Architecture** | Vault format, binary layout, KDF derivation, and inode identity | [Security Model & Internals](docs/content/docs/architecture/security-model.mdx) |

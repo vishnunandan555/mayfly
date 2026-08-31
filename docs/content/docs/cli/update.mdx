@@ -30,22 +30,22 @@ mf update --yes
 
 The `update` command queries the GitHub Releases API for the latest release:
 
-1. Compares the remote tag (e.g. `v0.0.2`) with the local binary version (`v0.0.1`) using strict semantic versioning (`major.minor.patch`).
+1. Compares the remote tag (e.g. `v0.0.6`) with the local binary version (`v0.0.5`) using strict semantic versioning (`major.minor.patch`).
 2. If your version is up to date, it displays:
    ```text
-   [OK] MayFly is up to date (v0.0.1 is the latest release).
+   [OK] MayFly is up to date (v0.0.5 is the latest release).
    ```
 3. If a higher release version exists, it displays the release notes, download URL, and asks for your confirmation:
    ```text
    A newer release of MayFly is available:
-     Current: v0.0.1
-     Latest:  v0.0.2
+     Current: v0.0.5
+     Latest:  v0.0.6
 
    Release Notes:
      - Enhanced process isolation
      - Performance improvements
 
-   Would you like to update to v0.0.2 now? [y/N]: 
+   Would you like to update to v0.0.6 now? [y/N]: 
    ```
 4. If confirmed (`y`), it safely downloads the verified platform binary, replaces `mayfly` and `mf` in your PATH, and verifies execution.
 

@@ -10,5 +10,5 @@ test_command = "make test"
 language = "Go"
 runtime_dependencies = 0
 bonus_challenges = ["reproducible-build", "stdlib-log", "package-killer"]
-stdlib_substitutions = 12
+stdlib_substitutions = 13
 packages_killed = ["godotenv (10M+ weekly)", "golang.org/x/crypto/pbkdf2 (5M+ weekly)", "bubbletea/tview (1M+ weekly)", "trufflehog/gitleaks", "atotto/clipboard"]

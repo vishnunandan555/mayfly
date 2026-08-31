@@ -1,5 +1,5 @@
 === Zero-Dependency Manifest Verification ===
-Date: Monday 31 August 2026 01:15:35 PM UTC
+Date: Monday 31 August 2026 05:38:26 PM UTC
 Go Version: go version go1.26.7-X:nodwarf5 linux/amd64
 
 --- go list -m all ---
@@ -18,7 +18,7 @@ mayfly/pkg/domain: [errors strings time unicode]
 mayfly/pkg/executor: [context errors fmt io mayfly/pkg/domain os os/exec os/signal runtime sort strings syscall]
 mayfly/pkg/project: [bytes crypto/sha256 encoding/hex encoding/json errors fmt mayfly/pkg/domain os path/filepath strings sync syscall time]
 mayfly/pkg/scanner: [bufio context mayfly/pkg/domain os path/filepath regexp sort strings unicode/utf8]
-mayfly/pkg/tui: [mayfly/pkg/application mayfly/pkg/domain mayfly/pkg/tui/terminal mayfly/pkg/tui/views os os/signal time]
+mayfly/pkg/tui: [mayfly/pkg/application mayfly/pkg/domain mayfly/pkg/tui/terminal mayfly/pkg/tui/views os os/signal strings time]
 mayfly/pkg/tui/layout: [mayfly/pkg/tui/terminal]
 mayfly/pkg/tui/terminal: [bytes encoding/base64 fmt io os os/exec os/signal runtime strings syscall unicode/utf8 unsafe]
 mayfly/pkg/tui/views: [context fmt mayfly/pkg/application mayfly/pkg/domain mayfly/pkg/tui/layout mayfly/pkg/tui/terminal mayfly/pkg/tui/widget path/filepath strings time]
