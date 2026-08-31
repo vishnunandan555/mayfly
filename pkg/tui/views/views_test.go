@@ -2,6 +2,7 @@ package views
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	"mayfly/pkg/tui/terminal"
 	"mayfly/pkg/vault"
 )
+
 
 func setupTestViews(t *testing.T) (*Screens, *application.Service) {
 	tempHome := t.TempDir()
@@ -117,3 +119,68 @@ func TestScreensProjectScopedMode(t *testing.T) {
 		t.Errorf("expected selProject.ID to match, got %v", screens.selProject.ID)
 	}
 }
+
+func TestScreensRevealSelectionOnly(t *testing.T) {
+	screens, svc := setupTestViews(t)
+	ctx := context.Background()
+	_ = svc.InitializeVault(ctx, []byte("testmasterpass"))
+	_ = svc.UnlockVault(ctx, []byte("testmasterpass"))
+
+	projDir := filepath.Join(t.TempDir(), "test-app")
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	proj, err := svc.RegisterProject(ctx, projDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+
+
+	_ = svc.SetSecret(ctx, proj.ID, "API_KEY", "secret_api_123")
+	_ = svc.SetSecret(ctx, proj.ID, "DB_PASS", "super_secret_db")
+
+	screens.SetProjectScoped(proj)
+	screens.reloadSecrets()
+
+	// Initially all secrets must be masked
+	for _, item := range screens.secretsList.Items {
+		if item.Secondary != "••••••••••••••••" {
+			t.Errorf("expected masked secret initially, got %q for %s", item.Secondary, item.Primary)
+		}
+	}
+
+	// Press 'v' to reveal the currently selected secret (first item: API_KEY)
+	screens.HandleKey(terminal.KeyEvent{Type: terminal.KeyRune, Rune: 'v'})
+
+	// Verify ONLY API_KEY is revealed and DB_PASS remains masked
+	var apiKeyFound, dbPassFound bool
+	for _, item := range screens.secretsList.Items {
+		if item.Primary == "API_KEY" {
+			apiKeyFound = true
+			if item.Secondary != "secret_api_123" {
+				t.Errorf("expected API_KEY to be revealed as 'secret_api_123', got %q", item.Secondary)
+			}
+		}
+		if item.Primary == "DB_PASS" {
+			dbPassFound = true
+			if item.Secondary != "••••••••••••••••" {
+				t.Errorf("expected DB_PASS to remain masked, but got revealed %q", item.Secondary)
+			}
+		}
+	}
+
+	if !apiKeyFound || !dbPassFound {
+		t.Fatalf("expected both API_KEY and DB_PASS to exist in list")
+	}
+
+	// Press 'v' again to toggle mask back
+	screens.HandleKey(terminal.KeyEvent{Type: terminal.KeyRune, Rune: 'v'})
+	for _, item := range screens.secretsList.Items {
+		if item.Secondary != "••••••••••••••••" {
+			t.Errorf("expected masked secret after toggle, got %q for %s", item.Secondary, item.Primary)
+		}
+	}
+}
+

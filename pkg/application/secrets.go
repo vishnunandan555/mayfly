@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"mayfly/pkg/domain"
 )
+
 
 // ListSecrets returns the list of secrets for a specific project.
 func (s *Service) ListSecrets(projectID string) ([]domain.Secret, error) {
@@ -30,8 +32,12 @@ func (s *Service) ListSecrets(projectID string) ([]domain.Secret, error) {
 			Value: v,
 		})
 	}
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Name < list[j].Name
+	})
 	return list, nil
 }
+
 
 // GetSecret retrieves a single decrypted secret value for the requested project and key name.
 func (s *Service) GetSecret(ctx context.Context, projectID string, name domain.SecretName) (string, error) {

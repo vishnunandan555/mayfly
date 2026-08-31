@@ -59,6 +59,7 @@ type Screens struct {
 	confirmDlg      *widget.ConfirmDialog
 	editOrigName    domain.SecretName
 	revealValue     bool
+	revealSecret    domain.SecretName
 	revealTimer     time.Time
 
 	// Init & Delete state
@@ -66,6 +67,7 @@ type Screens struct {
 	deleteProjectID string
 	deleteProjName  string
 }
+
 
 // NewScreens initializes all screen widgets and determines the initial display mode.
 func NewScreens(svc *application.Service, currentDir string) *Screens {
@@ -121,17 +123,19 @@ func (s *Screens) Tick() {
 		elapsed := time.Since(s.revealTimer)
 		if elapsed >= 10*time.Second {
 			s.revealValue = false
+			s.revealSecret = ""
 			s.revealTimer = time.Time{}
-			s.SetStatus("[MASKED] Secrets auto-masked after 10s timeout")
+			s.SetStatus("[MASKED] Secret auto-masked after 10s timeout")
 			s.reloadSecrets()
 		} else {
 			remaining := 10 - int(elapsed.Seconds())
-			s.status = fmt.Sprintf("[REVEALED] Secret visible (%ds remaining before auto-mask)", remaining)
+			s.status = fmt.Sprintf("[REVEALED] '%s' visible (%ds remaining before auto-mask)", s.revealSecret, remaining)
 		}
 	} else if !s.statusTimer.IsZero() && time.Since(s.statusTimer) > 4*time.Second && !s.revealValue {
 		s.status = ""
 	}
 }
+
 
 // HandleKey processes keyboard input and transitions between screens.
 func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
@@ -291,6 +295,9 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 		case terminal.KeyRune:
 			switch event.Rune {
 			case 'q', 'Q':
+				s.revealValue = false
+				s.revealSecret = ""
+				s.revealTimer = time.Time{}
 				s.mode = ModeGlobalProjects
 				s.reloadProjects()
 				return false
@@ -302,18 +309,30 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 					s.SetStatus(fmt.Sprintf("[OK] Copied '%s' to clipboard", sec.Name))
 				}
 				return false
-			case 'v', 'V':
-				s.revealValue = !s.revealValue
-				if s.revealValue {
-					s.revealTimer = time.Now()
-					s.status = "[REVEALED] Secret visible (10s remaining before auto-mask)"
-				} else {
+			case 'v', 'V', 'r', 'R':
+				sel := s.secretsList.SelectedItem()
+				if sel == nil {
+					s.SetStatus("No secret selected to reveal")
+					return false
+				}
+				sec := sel.Data.(domain.Secret)
+				if s.revealValue && s.revealSecret == sec.Name {
+					s.revealValue = false
+					s.revealSecret = ""
 					s.revealTimer = time.Time{}
-					s.SetStatus("[MASKED] Secrets masked")
+					s.SetStatus(fmt.Sprintf("[MASKED] '%s' masked", sec.Name))
+				} else {
+					s.revealValue = true
+					s.revealSecret = sec.Name
+					s.revealTimer = time.Now()
+					s.status = fmt.Sprintf("[REVEALED] '%s' visible (10s remaining before auto-mask)", sec.Name)
 				}
 				s.reloadSecrets()
 				return false
 			case 'n', 'N':
+				s.revealValue = false
+				s.revealSecret = ""
+				s.revealTimer = time.Time{}
 				s.editOrigName = ""
 				s.secretName.Clear()
 				s.secretValue.Clear()
@@ -321,6 +340,7 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 				s.secretValue.Focused = false
 				s.mode = ModeEditSecret
 				return false
+
 			case 'd', 'D':
 				sel := s.secretsList.SelectedItem()
 				if sel != nil {

@@ -23,7 +23,7 @@ func (s *Screens) reloadSecrets() {
 	var items []widget.ListItem
 	for _, sec := range list {
 		maskedVal := "••••••••••••••••"
-		if s.revealValue {
+		if s.revealValue && sec.Name == s.revealSecret {
 			maskedVal = sec.Value
 		}
 		items = append(items, widget.ListItem{
@@ -33,6 +33,7 @@ func (s *Screens) reloadSecrets() {
 			Data:      sec,
 		})
 	}
+
 
 	projName := filepath.Base(s.selProject.CanonicalPath)
 	s.secretsList.Title = fmt.Sprintf("Secrets for: %s", projName)
