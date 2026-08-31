@@ -40,6 +40,14 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'https://mayfly-docs.vercel.app');
+
 export const metadata: Metadata = {
   title: {
     template: '%s | MayFly Documentation',
@@ -68,7 +76,7 @@ export const metadata: Metadata = {
   authors: [{ name: 'MayFly Team', url: 'https://github.com/vishnunandan555/mayfly' }],
   creator: 'MayFly Team',
   publisher: 'MayFly',
-  metadataBase: new URL('https://mayfly.dev'),
+  metadataBase: new URL(siteUrl),
   alternates: {
     canonical: '/',
   },
@@ -76,9 +84,15 @@ export const metadata: Metadata = {
     title: 'MayFly: Zero-Disk Secrets Manager & In-Memory Process Injector',
     description:
       'Stop storing API keys in plaintext .env files. MayFly encrypts credentials locally and injects them directly into application RAM with zero third-party dependencies.',
-    url: 'https://mayfly.dev',
+    url: siteUrl,
     siteName: 'MayFly',
     images: [
+      {
+        url: '/og.png',
+        width: 1200,
+        height: 630,
+        alt: 'MayFly: Zero-Disk Secrets Manager & In-Memory Process Injector',
+      },
       {
         url: '/icon.png',
         width: 512,
@@ -91,10 +105,10 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'MayFly: Zero-Disk Secrets Manager',
+    title: 'MayFly: Zero-Disk Secrets Manager & In-Memory Process Injector',
     description:
       'Never write .env files to disk again. Encrypted local vault with in-memory process injection in pure Go stdlib (0 dependencies).',
-    images: ['/icon.png'],
+    images: ['/og.png'],
     creator: '@vishnunandan555',
   },
   robots: {
@@ -135,7 +149,7 @@ const jsonLd = {
   applicationCategory: 'DeveloperApplication, SecurityApplication',
   description:
     'A zero-dependency local secrets manager that encrypts API keys and injects them directly into application memory without writing plaintext .env files to disk.',
-  url: 'https://mayfly.dev',
+  url: siteUrl,
   downloadUrl: 'https://github.com/vishnunandan555/mayfly/releases',
   codeRepository: 'https://github.com/vishnunandan555/mayfly',
   license: 'https://opensource.org/licenses/AGPL-3.0',

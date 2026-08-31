@@ -27,7 +27,13 @@ export default async function Page(props: PageProps) {
 
   const data = page.data as Record<string, any>;
   const MDX = data.body ?? data.exports?.default;
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://mayfly.dev';
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'https://mayfly-docs.vercel.app');
   const pageUrl = `${baseUrl}${page.url}`;
 
   // Rich Snippet JSON-LD for Technical Documentation Articles
@@ -131,7 +137,13 @@ export async function generateMetadata(props: PageProps): Promise<Metadata> {
   }
 
   const data = page.data as Record<string, any>;
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://mayfly.dev';
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'https://mayfly-docs.vercel.app');
   const pageUrl = `${baseUrl}${page.url}`;
   const title = `${data.title} | MayFly Documentation`;
   const description =
@@ -152,6 +164,12 @@ export async function generateMetadata(props: PageProps): Promise<Metadata> {
       siteName: 'MayFly Documentation',
       images: [
         {
+          url: '/og.png',
+          width: 1200,
+          height: 630,
+          alt: `${data.title} - MayFly Documentation`,
+        },
+        {
           url: '/icon.png',
           width: 512,
           height: 512,
@@ -163,7 +181,7 @@ export async function generateMetadata(props: PageProps): Promise<Metadata> {
       card: 'summary_large_image',
       title: title,
       description: description,
-      images: ['/icon.png'],
+      images: ['/og.png'],
       creator: '@vishnunandan555',
     },
   };

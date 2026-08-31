@@ -1,10 +1,14 @@
 import type { MetadataRoute } from 'next';
 import { source } from '@/lib/source';
 
-export const dynamic = 'force-static';
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://mayfly.dev';
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'https://mayfly-docs.vercel.app');
   const currentDate = new Date();
 
   const routes: MetadataRoute.Sitemap = [
