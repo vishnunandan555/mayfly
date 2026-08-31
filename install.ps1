@@ -13,7 +13,7 @@ param (
     [switch]$Update,
     [switch]$Fresh,
     [switch]$Reinstall,
-    [string]$Version = "v0.0.3"
+    [string]$Version = "v0.0.4"
 )
 
 $InstallDir = "$HOME\.local\bin"

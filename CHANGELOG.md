@@ -3,6 +3,14 @@
 All notable changes to MayFly are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.4] — 2026-08-31
+
+### Fixed
+- **Windows UTF-8 BOM Handling**: Strip UTF-8 Byte Order Marks (`\xef\xbb\xbf`) emitted by Windows editors/PowerShell when reading audit logs and project registry metadata.
+- **Audit Log Sequence Synchronization**: Scan latest state before write to eliminate sequence mismatch errors in audit trail verification.
+- **Windows Binary Cleanup**: Support removing `.exe` binaries (`mayfly.exe`, `mf.exe`) in uninstaller.
+- **Project Hygiene**: Added submission and test artifacts to `.gitignore`.
+
 ---
 
 ## [0.0.3] — 2026-08-31
