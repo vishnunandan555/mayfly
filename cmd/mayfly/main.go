@@ -28,7 +28,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	passwordFromStdin = false
 
 	// Extract --password-stdin anywhere in args before subcommand dispatch.
-	// This ensures commands like `mayfly run --password-stdin npm start` or `mayfly set KEY --password-stdin` work seamlessly.
+	// This ensures commands like `mf --password-stdin npm start` or `mf set KEY --password-stdin` work seamlessly.
 	var cleanArgs []string
 	for _, arg := range args {
 		if arg == "--password-stdin" {
@@ -127,9 +127,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "delete":
 		return cmdDelete(ctx, svc, subArgs, stdin, stdout, stderr)
 
-	case "run":
-		return cmdRun(ctx, svc, subArgs, stdin, stdout, stderr)
-
 	case "scan":
 		return cmdScan(ctx, svc, subArgs, stdout, stderr)
 
@@ -201,7 +198,6 @@ Usage:
   mayfly delete <NAME>                Remove a secret from the vault
   mayfly import [FILE] [--delete]     Import secrets from .env file into vault (default: .env)
   mayfly rotate-password              Re-encrypt vault with a new master password
-  mayfly run <COMMAND> [ARGS...]      Explicit process execution alias
   mayfly env [--shell bash|fish|json] Export secrets as shell environment variables
   mayfly status                       Show vault health, project count, and audit summary
   mayfly check                        Verify vault, audit log, and project registry integrity
@@ -226,8 +222,8 @@ Global Flags:
   --password-stdin                    Read vault password from stdin (safer than env var for CI)
 
 CI / Automation:
-  echo "$VAULT_PASS" | mayfly --password-stdin run npm start
-  # Preferred over: MAYFLY_VAULT_PASSWORD=$VAULT_PASS mayfly run npm start
+  echo "$VAULT_PASS" | mf --password-stdin npm start
+  # Preferred over: MAYFLY_VAULT_PASSWORD=$VAULT_PASS mf npm start
   # (env vars are readable via /proc/<pid>/environ by same-user processes)
 
 Short alias:

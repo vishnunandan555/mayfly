@@ -88,16 +88,7 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 		t.Fatalf("unexpected list output: %s", stdout)
 	}
 
-	// 5. Run command with injected secret (explicit 'run')
-	code, stdout, stderr = executeMayfly(t, []string{"run", "sh", "-c", "echo DB=$DATABASE_URL"}, "masterpass\n", projDir)
-	if code != 0 {
-		t.Fatalf("run failed: code=%d, err=%s", code, stderr)
-	}
-	if !strings.Contains(stdout, "DB=postgres://localhost/db") {
-		t.Fatalf("unexpected run output: %s", stdout)
-	}
-
-	// 5b. Direct command execution without 'run' (e.g. 'mayfly <cmd>' / 'mf <cmd>')
+	// 5. Direct command execution (e.g. 'mayfly <cmd>' / 'mf <cmd>')
 	code, stdout, stderr = executeMayfly(t, []string{"sh", "-c", "echo DIRECT_DB=$DATABASE_URL"}, "masterpass\n", projDir)
 	if code != 0 {
 		t.Fatalf("direct execution failed: code=%d, err=%s", code, stderr)

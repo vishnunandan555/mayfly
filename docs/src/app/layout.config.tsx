@@ -4,7 +4,7 @@ import React from 'react';
 export const baseOptions: BaseLayoutProps = {
   nav: {
     title: (
-      <div className="flex items-center gap-2.5 font-semibold tracking-tight text-neutral-100">
+      <div className="flex items-center gap-2.5 font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
         <img
           src="/icon.png"
           alt="MayFly Logo"

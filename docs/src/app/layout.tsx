@@ -32,12 +32,12 @@ const instrumentSerif = Instrument_Serif({
 export const viewport: Viewport = {
   themeColor: [
     { media: '(prefers-color-scheme: dark)', color: '#0a0d0c' },
-    { media: '(prefers-color-scheme: light)', color: '#0a0d0c' },
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
   ],
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
-  colorScheme: 'dark',
+  viewportFit: 'cover',
 };
 
 export const metadata: Metadata = {
@@ -187,7 +187,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           }}
         />
       </head>
-      <body className="flex min-h-screen flex-col bg-background font-sans antialiased selection:bg-amber-950/60 selection:text-amber-200">
+      <body className="flex min-h-screen flex-col bg-fd-background text-fd-foreground font-sans antialiased selection:bg-amber-500/20 selection:text-amber-900 dark:selection:bg-amber-950/60 dark:selection:text-amber-200 overflow-x-clip">
         <RootProvider>{children}</RootProvider>
       </body>
     </html>

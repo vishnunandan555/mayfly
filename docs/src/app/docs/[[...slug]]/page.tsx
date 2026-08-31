@@ -92,11 +92,11 @@ export default async function Page(props: PageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
-      <DocsTitle className="text-2xl sm:text-3xl font-semibold tracking-tight text-neutral-100">
+      <DocsTitle className="text-2xl sm:text-3xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
         {data.title}
       </DocsTitle>
       {data.description && (
-        <DocsDescription className="text-sm sm:text-base text-neutral-400 mt-2">
+        <DocsDescription className="text-sm sm:text-base text-neutral-600 dark:text-neutral-400 mt-2">
           {data.description}
         </DocsDescription>
       )}

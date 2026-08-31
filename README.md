@@ -35,7 +35,7 @@ OPENAI_API_KEY=sk-proj-1234567890
 
 **The Threat:** Whenever you run `npm install`, `pip install`, or `cargo build`, third-party supply-chain malware can scan your filesystem, read the `.env` file, and exfiltrate your production credentials before your application even starts.
 
-**MayFly's Solution:** Never write `.env` files to disk. All secrets are stored in a single authenticated binary vault (`~/.mayfly/vault.enc`) encrypted with **AES-256-GCM** and derived via **RFC 8018 PBKDF2** (600,000 iterations). When you launch your application (`mayfly run npm start` or `mf run`), MayFly decrypts secrets directly into **volatile memory (RAM)**, attaches them to the child process environment, and immediately zeroes memory buffers when the process exits.
+**MayFly's Solution:** Never write `.env` files to disk. All secrets are stored in a single authenticated binary vault (`~/.mayfly/vault.enc`) encrypted with **AES-256-GCM** and derived via **RFC 8018 PBKDF2** (600,000 iterations). When you launch your application (`mf npm start` or `mayfly npm start`), MayFly decrypts secrets directly into **volatile memory (RAM)**, attaches them to the child process environment, and immediately zeroes memory buffers when the process exits.
 
 ```text
 ┌── [LIVE WORKFLOW DEMONSTRATION] ────────────────────────────────────────────────┐

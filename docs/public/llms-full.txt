@@ -9,7 +9,7 @@ MayFly is a zero-external-dependency local secrets manager written in 100% pure 
 - `mf get KEY`: Decrypts and prints a secret value.
 - `mf list`: Lists all configured secret keys in current project.
 - `mf delete KEY`: Removes a secret key.
-- `mf run <command>` or `mf <command>`: Decrypts secrets into RAM and executes the target process (e.g., `mf npm run dev`, `mf python main.py`, `mf go run .`).
+- `mf <command>`: Decrypts secrets into RAM and executes the target process (e.g., `mf npm run dev`, `mf python main.py`, `mf go run .`).
 - `mf scan`: Scans the current repository for unencrypted `.env` files or hardcoded API keys.
 - `mf audit verify`: Validates cryptographic SHA-256 integrity of the local access log.
 - `mf`: Launches the full-screen interactive 2D double-buffered terminal user interface (TUI).

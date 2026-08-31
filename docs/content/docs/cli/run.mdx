@@ -1,31 +1,31 @@
 ---
-title: "mayfly run"
-description: Execute child processes with in-memory decrypted environment variables.
+title: "Process Execution (mf <cmd>)"
+description: Execute any command or dev server with in-memory decrypted secrets.
 icon: Terminal
 ---
 
 ## Synopsis
 
 ```bash
-# Recommended shorthand syntax:
+# Direct in-memory execution (recommended):
 mf <command> [args...]
-mayfly <command> [args...]
 
-# Explicit execution alias:
-mayfly run [--isolated] [--] <command> [args...]
+# Or using the full binary name:
+mayfly <command> [args...]
 ```
 
 ---
 
 ## Description
 
-MayFly executes child processes directly with in-memory secrets injection. You can run any command simply by prefixing it with `mf` or `mayfly` (or using the explicit `run` subcommand).
-1. Resolves the current project identity.
-2. Decrypts the project secrets into volatile memory.
+MayFly executes child processes directly with in-memory secrets injection. Any command prefixed with `mf` or `mayfly` runs with decrypted project secrets loaded into volatile memory:
+
+1. Resolves the current project identity from the folder inode.
+2. Decrypts the project secrets into volatile memory (RAM).
 3. Merges existing system environment variables with the project secrets (project secrets take precedence).
-4. Spawns the specified binary via `os/exec`.
+4. Spawns the specified binary directly via `os/exec`.
 5. Forwards standard I/O (stdin, stdout, stderr) and propagates OS signals (`SIGINT`, `SIGTERM`).
-6. Cleans up decrypted memory buffers when the process exits.
+6. Cleans up and zeroes decrypted memory buffers immediately when the process exits.
 
 ---
 
@@ -34,36 +34,39 @@ MayFly executes child processes directly with in-memory secrets injection. You c
 ### Node.js / NPM Application
 
 ```bash
-mayfly run npm run dev
+mf npm run dev
+# or with pnpm / yarn / bun
+mf pnpm dev
 ```
 
 ### Python FastAPI / Flask
 
 ```bash
-mayfly run uvicorn app.main:app --reload --port 8000
+mf uvicorn app.main:app --reload --port 8000
 ```
 
 ### Docker Compose
 
 ```bash
-mayfly run docker compose up -d
+mf docker compose up -d
 ```
 
 ### Running with Flag Disambiguation (`--`)
 
-If your target command uses flags that collide with MayFly flags, use `--` to separate them:
+If your target command uses flags that collide with MayFly options, use `--` to separate them:
 
 ```bash
-mayfly run -- go test -v -cover ./...
+mf -- go test -v -cover ./...
 ```
 
 ---
 
 ## Options
 
-### `--isolated`
-When enabled, MayFly does not pass host system environment variables to the child process. The child process receives **only** the secrets stored in the MayFly vault alongside minimal required system paths (`PATH`, `HOME`).
+### Passing Vault Password via Stdin (CI / Automation)
+
+For automated environments, you can securely pipe the vault password via stdin:
 
 ```bash
-mayfly run --isolated ./run-secure-job.sh
+echo "$VAULT_PASS" | mf --password-stdin npm start
 ```
