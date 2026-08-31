@@ -41,18 +41,32 @@ When run without a value argument in an interactive terminal, MayFly opens a tem
 
 ## mf get
 
-Retrieve the decrypted value of a secret key.
+Retrieve and view the decrypted value of a secret key with zero terminal scroll-back history.
 
 ```bash
-mf get <KEY> [--clip]
+mf get <KEY> [--clip] [--raw]
 ```
 
-### Flags
-- `--clip` / `-c`: Copy the secret value directly to your system clipboard (using OSC 52, `pbcopy`, `wl-copy`, or Windows `clip`) without printing plaintext to stdout or terminal scroll-back.
+### Ephemeral Zero-History Secret Viewer
+When executed in an interactive terminal, `mf get` automatically launches an isolated **alternate-screen modal (`\x1b[?1049h`)**:
+- Displays the secret name, project context, and secret value in a clean, focused window.
+- Press **`C`** to immediately copy the secret to the system clipboard.
+- Press **`Q`**, **`Esc`**, or **`Enter`** to exit and destroy the screen.
+- **Zero plaintext leakage:** The terminal screen is completely restored to its exact previous state, leaving nothing in terminal scroll-back or command history.
+
+### Flags & Pipeline Usage
+- `--clip` / `-c`: Copy the secret value directly to your system clipboard (using OSC 52, `pbcopy`, `wl-copy`, or Windows `clip`) without displaying the modal.
+- `--raw` / `-r`: Output raw plaintext directly to stdout.
+- **Pipelines & Subshells:** When piped or captured in scripts (e.g. `TOKEN=$(mf get STRIPE_KEY)` or `mf get KEY | pbcopy`), MayFly automatically detects non-TTY output and prints raw plaintext for seamless script compatibility.
 
 ```bash
+# Copy directly to clipboard
 mf get STRIPE_SECRET_KEY --clip
+
+# Output raw in shell scripts
+TOKEN=$(mf get STRIPE_SECRET_KEY)
 ```
+
 
 ---
 

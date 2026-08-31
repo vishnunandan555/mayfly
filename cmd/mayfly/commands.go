@@ -12,9 +12,11 @@ import (
 
 	"mayfly/pkg/application"
 	"mayfly/pkg/domain"
+	"mayfly/pkg/tui"
 	"mayfly/pkg/tui/terminal"
 	"mayfly/pkg/updater"
 )
+
 
 func cmdInit(ctx context.Context, svc *application.Service, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
@@ -153,22 +155,25 @@ func cmdSet(ctx context.Context, svc *application.Service, args []string, stdin 
 
 func cmdGet(ctx context.Context, svc *application.Service, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) < 1 {
-		fmt.Fprintln(stderr, "usage: mayfly get <NAME> [--clip]")
+		fmt.Fprintln(stderr, "usage: mayfly get <NAME> [--clip] [--raw]")
 		return 2
 	}
 
 	clip := false
+	raw := false
 	var rawName string
 	for _, arg := range args {
 		if arg == "--clip" || arg == "-c" {
 			clip = true
+		} else if arg == "--raw" || arg == "-r" {
+			raw = true
 		} else if rawName == "" {
 			rawName = arg
 		}
 	}
 
 	if rawName == "" {
-		fmt.Fprintln(stderr, "usage: mayfly get <NAME> [--clip]")
+		fmt.Fprintln(stderr, "usage: mayfly get <NAME> [--clip] [--raw]")
 		return 2
 	}
 
@@ -208,9 +213,24 @@ func cmdGet(ctx context.Context, svc *application.Service, args []string, stdin 
 		return 0
 	}
 
+	// If stdout and stdin are interactive terminals and not --raw, show ephemeral viewer
+	fOut, isOutFile := stdout.(*os.File)
+	fIn, isInFile := stdin.(*os.File)
+	isInteractive := isOutFile && isInFile && terminal.IsTerminal(fOut) && terminal.IsTerminal(fIn)
+
+	if isInteractive && !raw && !isTesting() {
+		projName := filepath.Base(proj.CanonicalPath)
+		if err := tui.ShowSecretViewer(projName, string(secName), val); err != nil {
+			fmt.Fprintf(stderr, "mayfly: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+
 	fmt.Fprintln(stdout, val)
 	return 0
 }
+
 
 func cmdList(ctx context.Context, svc *application.Service, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	jsonOutput := false

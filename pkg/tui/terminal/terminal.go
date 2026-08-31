@@ -125,6 +125,23 @@ func (f *Frame) SetCell(row, col int, cell Cell) {
 	f.cells[row*f.size.Columns+col] = cell
 }
 
+// String returns the plain text content of the frame row-by-row.
+func (f *Frame) String() string {
+	var sb strings.Builder
+	for r := 0; r < f.size.Rows; r++ {
+		for c := 0; c < f.size.Columns; c++ {
+			rn := f.cells[r*f.size.Columns+c].Rune
+			if rn == 0 {
+				rn = ' '
+			}
+			sb.WriteRune(rn)
+		}
+		sb.WriteByte('\n')
+	}
+	return sb.String()
+}
+
+
 func (f *Frame) DrawText(row, col int, style Style, text string) {
 	currCol := col
 	for _, r := range text {

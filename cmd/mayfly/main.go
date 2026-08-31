@@ -197,8 +197,9 @@ Usage:
   mayfly c, mayfly current            Launch TUI scoped directly to current project
   mayfly init [-path DIR]             Initialize project in current directory or target path
   mayfly set <NAME> [--clip] [VALUE]  Add or update an encrypted secret (alt-screen if interactive)
-  mayfly get <NAME> [--clip]          Output decrypted secret or copy to clipboard (-c)
+  mayfly get <NAME> [--clip] [--raw]  View secret in zero-history TUI (or --clip, --raw)
   mayfly list [--json]                List secret keys for the current project
+
   mayfly delete <NAME>                Remove a secret from the vault
   mayfly import [FILE] [--delete]     Import secrets from .env file into vault (default: .env)
   mayfly rotate-password              Re-encrypt vault with a new master password

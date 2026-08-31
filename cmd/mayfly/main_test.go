@@ -80,7 +80,7 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 		t.Fatalf("unexpected empty set output: %s", stdout)
 	}
 
-	// 3. Get secret
+	// 3. Get secret (non-interactive stdout buffer output)
 	code, stdout, stderr = executeMayfly(t, []string{"get", "DATABASE_URL"}, "masterpass\n", projDir)
 	if code != 0 {
 		t.Fatalf("get failed: code=%d, err=%s", code, stderr)
@@ -89,11 +89,30 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 		t.Fatalf("unexpected get output: %s", stdout)
 	}
 
-	// 3b. Get secret with invalid name
+	// 3a. Get secret with --raw flag
+	code, stdout, stderr = executeMayfly(t, []string{"get", "DATABASE_URL", "--raw"}, "masterpass\n", projDir)
+	if code != 0 {
+		t.Fatalf("get --raw failed: code=%d, err=%s", code, stderr)
+	}
+	if strings.TrimSpace(stdout) != "postgres://localhost/db" {
+		t.Fatalf("unexpected get --raw output: %s", stdout)
+	}
+
+	// 3b. Get secret with --clip flag
+	code, stdout, stderr = executeMayfly(t, []string{"get", "DATABASE_URL", "--clip"}, "masterpass\n", projDir)
+	if code != 0 {
+		t.Fatalf("get --clip failed: code=%d, err=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "copied to clipboard") {
+		t.Fatalf("unexpected get --clip output: %s", stdout)
+	}
+
+	// 3c. Get secret with invalid name
 	code, _, stderr = executeMayfly(t, []string{"get", "123-INVALID"}, "masterpass\n", projDir)
 	if code == 0 || !strings.Contains(stderr, "invalid secret name") {
 		t.Fatalf("expected validation error for invalid name on get: code=%d, err=%s", code, stderr)
 	}
+
 
 	// 4. List secrets
 	code, stdout, stderr = executeMayfly(t, []string{"list"}, "masterpass\n", projDir)
