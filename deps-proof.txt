@@ -1,5 +1,5 @@
 === Zero-Dependency Manifest Verification ===
-Date: Monday 31 August 2026 11:58:33 AM UTC
+Date: Monday 31 August 2026 12:24:50 PM UTC
 Go Version: go version go1.26.7-X:nodwarf5 linux/amd64
 
 --- go list -m all ---
@@ -13,10 +13,10 @@ go 1.22
 --- Package Import Tree ---
 mayfly/cmd/mayfly: [context encoding/json errors flag fmt io mayfly/pkg/application mayfly/pkg/audit mayfly/pkg/domain mayfly/pkg/executor mayfly/pkg/project mayfly/pkg/scanner mayfly/pkg/tui mayfly/pkg/tui/terminal mayfly/pkg/updater mayfly/pkg/vault os path/filepath strings]
 mayfly/pkg/application: [bufio context errors fmt mayfly/pkg/audit mayfly/pkg/domain mayfly/pkg/executor mayfly/pkg/project mayfly/pkg/scanner mayfly/pkg/vault os runtime sort strings sync time]
-mayfly/pkg/audit: [bufio context crypto/sha256 encoding/hex encoding/json errors fmt mayfly/pkg/domain os path/filepath sync time]
+mayfly/pkg/audit: [bufio bytes context crypto/sha256 encoding/hex encoding/json errors fmt mayfly/pkg/domain os path/filepath sync time]
 mayfly/pkg/domain: [errors strings time unicode]
 mayfly/pkg/executor: [context errors fmt io mayfly/pkg/domain os os/exec os/signal runtime sort strings syscall]
-mayfly/pkg/project: [crypto/sha256 encoding/hex encoding/json errors fmt mayfly/pkg/domain os path/filepath strings sync syscall time]
+mayfly/pkg/project: [bytes crypto/sha256 encoding/hex encoding/json errors fmt mayfly/pkg/domain os path/filepath strings sync syscall time]
 mayfly/pkg/scanner: [bufio context mayfly/pkg/domain os path/filepath regexp sort strings unicode/utf8]
 mayfly/pkg/tui: [mayfly/pkg/application mayfly/pkg/domain mayfly/pkg/tui/terminal mayfly/pkg/tui/views os os/signal time]
 mayfly/pkg/tui/layout: [mayfly/pkg/tui/terminal]
