@@ -1,8 +1,9 @@
 # 🔍 MayFly Credential Scanner (`pkg/scanner`)
 
-[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](file:///home/vishnunandan555/Projects/mayfly/STDLIB.md)
-[![Package Killer](https://img.shields.io/badge/Replaces-trufflehog%20%7C%20gitleaks-red)](file:///home/vishnunandan555/Projects/mayfly/HACKATHON_WINNING_STRATEGY.md)
-[![Detection](https://img.shields.io/badge/Engine-Entropy%20%2B%20Regex%20Signatures-blue)](file:///home/vishnunandan555/Projects/mayfly/pkg/scanner/scanner.go)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](../../STDLIB.md)
+[![Package Killer](https://img.shields.io/badge/Replaces-trufflehog%20%7C%20gitleaks-red)](../../STDLIB.md#9-plaintext-credential-scanner)
+[![Detection](https://img.shields.io/badge/Engine-Entropy%20%2B%20Regex%20Signatures-blue)](scanner.go)
+
 
 `pkg/scanner` is a **high-performance, zero-dependency filesystem crawler and credential leak detector** that inspects codebases for plaintext secrets before git commits occur.
 

@@ -1,7 +1,8 @@
 # 🌐 MayFly Domain Package (`pkg/domain`)
 
-[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](file:///home/vishnunandan555/Projects/mayfly/STDLIB.md)
-[![Architecture](https://img.shields.io/badge/Pattern-Domain%20Driven%20Design%20(DDD)-blue)](file:///home/vishnunandan555/Projects/mayfly/pkg/domain/models.go)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](../../STDLIB.md)
+[![Architecture](https://img.shields.io/badge/Pattern-Domain%20Driven%20Design%20(DDD)-blue)](domain.go)
+
 
 `pkg/domain` defines the core data contracts, entity models, value objects, and repository interfaces for the MayFly workspace ecosystem.
 

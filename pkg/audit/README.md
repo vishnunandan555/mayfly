@@ -1,8 +1,9 @@
 # 📜 MayFly Cryptographic Audit Log (`pkg/audit`)
 
-[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](file:///home/vishnunandan555/Projects/mayfly/STDLIB.md)
-[![Package Killer](https://img.shields.io/badge/Replaces-logrus%20%7C%20zap%20%7C%20SIEM-red)](file:///home/vishnunandan555/Projects/mayfly/HACKATHON_WINNING_STRATEGY.md)
-[![Integrity](https://img.shields.io/badge/Blockchain%20Grade-SHA--256%20Hash%20Chained-orange)](file:///home/vishnunandan555/Projects/mayfly/pkg/audit/log.go)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](../../STDLIB.md)
+[![Package Killer](https://img.shields.io/badge/Replaces-logrus%20%7C%20zap%20%7C%20SIEM-red)](../../STDLIB.md#7-tamper-evident-audit-trail)
+[![Integrity](https://img.shields.io/badge/Blockchain%20Grade-SHA--256%20Hash%20Chained-orange)](log.go)
+
 
 `pkg/audit` is a **zero-dependency, tamper-evident cryptographic access logger**. It records every secret access, injection, and password rotation event into a mathematically verifiable SHA-256 hash chain (`~/.mayfly/audit.log`).
 

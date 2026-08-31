@@ -1,8 +1,9 @@
 # 📁 MayFly Workspace Project Registry (`pkg/project`)
 
-[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](file:///home/vishnunandan555/Projects/mayfly/STDLIB.md)
-[![Package Killer](https://img.shields.io/badge/Replaces-google%2Fuuid%20%7C%20afero-red)](file:///home/vishnunandan555/Projects/mayfly/HACKATHON_WINNING_STRATEGY.md)
-[![Storage](https://img.shields.io/badge/Registry-Atomic%20JSON%20Persistence-blue)](file:///home/vishnunandan555/Projects/mayfly/pkg/project/registry.go)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20Stdlib)-brightgreen)](../../STDLIB.md)
+[![Package Killer](https://img.shields.io/badge/Replaces-google%2Fuuid%20%7C%20afero-red)](../../STDLIB.md#8-filesystem-project-identity)
+[![Storage](https://img.shields.io/badge/Registry-Atomic%20JSON%20Persistence-blue)](registry.go)
+
 
 `pkg/project` is a **zero-dependency directory registry and canonical path resolution engine** that links local development workspaces with their corresponding MayFly project vaults.
 
