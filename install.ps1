@@ -53,16 +53,24 @@ if ($Uninstall) {
     exit 0
 }
 
+$arch = if ([System.Environment]::Is64BitOperatingSystem) { "amd64" } else { "arm64" }
+
 Write-Host "=================================================" -ForegroundColor Cyan
 if ($Update) {
-    Write-Host "  Updating MayFly..." -ForegroundColor Cyan
+    Write-Host "  🦋 MayFly — Updating to $Version" -ForegroundColor Cyan
 } else {
-    Write-Host "  Installing MayFly (Zero-Dependency Secrets)..." -ForegroundColor Cyan
+    Write-Host "  🦋 MayFly — Zero-Dependency Secrets Workspace" -ForegroundColor Cyan
+    Write-Host "  Secure Installation & Supply-Chain Verifier" -ForegroundColor Cyan
 }
+Write-Host "=================================================" -ForegroundColor Cyan
+Write-Host "  Target Version : $Version"
+Write-Host "  Platform       : Windows ($arch)"
+Write-Host "  Install Path   : $InstallDir"
+Write-Host "  Security Mode  : Tier-2 Cryptographic SHA-256 Verified"
 Write-Host "=================================================`n" -ForegroundColor Cyan
 
 Write-Host "Choose command alias to install:"
-Write-Host "  [1] Both 'mayfly' and 'mf' (Default — press Enter)"
+Write-Host "  [1] Both 'mayfly' and 'mf' (Recommended — press Enter)"
 Write-Host "  [2] Only 'mayfly'"
 Write-Host "  [3] Only 'mf'`n"
 

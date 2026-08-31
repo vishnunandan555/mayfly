@@ -47,9 +47,13 @@ export default function HomePage() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2.5 group">
-              <span className="inline-flex size-5 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-inset ring-amber-500/30">
-                <span className="size-2 rounded-full bg-amber-400 shadow-[0_0_8px_2px_rgba(245,158,11,0.6)] group-hover:scale-125 transition-transform" />
-              </span>
+              <img
+                src="/icon.png"
+                alt="MayFly Logo"
+                width={24}
+                height={24}
+                className="size-6 object-contain shrink-0 group-hover:scale-105 transition-transform"
+              />
               <span className="font-mono text-sm font-bold tracking-widest text-neutral-100">MAYFLY</span>
             </Link>
           </div>

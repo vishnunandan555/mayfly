@@ -1,14 +1,22 @@
-# 🦋 MayFly
+<p align="center">
+  <img src="assets/icon.png" width="64" height="64" alt="MayFly Logo" />
+</p>
 
-> **Zero-Dependency Ephemeral Secrets Workspace & In-Memory Process Injector**  
-> *Built 100% from first principles using the Go standard library. 0 external dependencies.*
+<h1 align="center">MayFly</h1>
 
-[![Go Version](https://img.shields.io/badge/go-1.22+-00ADD8?style=flat&logo=go)](go.mod)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-0%20external-brightgreen)](STDLIB.md)
-[![Track](https://img.shields.io/badge/Track-E%20%7C%20Security%20%26%20Crypto-blueviolet)](.zero-dep.toml)
-[![Reproducible Build](https://img.shields.io/badge/build-reproducible%20(+5%20pts)-success)](#-testing--verification)
-[![Platforms](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue)](install.sh)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-orange)](LICENSE)
+<p align="center">
+  <strong>Zero-Dependency Ephemeral Secrets Workspace & In-Memory Process Injector</strong><br />
+  <em>Built 100% from first principles using the Go standard library. 0 external dependencies.</em>
+</p>
+
+<p align="center">
+  <a href="go.mod"><img src="https://img.shields.io/badge/go-1.22+-00ADD8?style=flat&logo=go" alt="Go Version" /></a>
+  <a href="STDLIB.md"><img src="https://img.shields.io/badge/dependencies-0%20external-brightgreen" alt="Zero Dependencies" /></a>
+  <a href=".zero-dep.toml"><img src="https://img.shields.io/badge/Track-E%20%7C%20Security%20%26%20Crypto-blueviolet" alt="Track" /></a>
+  <a href="#testing--verification"><img src="https://img.shields.io/badge/build-reproducible%20(+5%20pts)-success" alt="Reproducible Build" /></a>
+  <a href="install.sh"><img src="https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue" alt="Platforms" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-orange" alt="License" /></a>
+</p>
 
 ---
 
