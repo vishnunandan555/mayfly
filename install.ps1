@@ -140,9 +140,19 @@ Write-Host "  Install Path   : $InstallDir"
 Write-Host "  Security Mode  : Tier-2 Cryptographic SHA-256 Verified"
 Write-Host "=================================================`n" -ForegroundColor Cyan
 
-# Prompt for command alias selection (default: 1)
+# Configure command aliases (preserve on update, prompt on fresh install)
 $aliasChoice = "1"
-if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+if ($Update) {
+    if ((Test-Path "$InstallDir\mayfly.exe") -and (Test-Path "$InstallDir\mf.exe")) {
+        $aliasChoice = "1"
+    } elseif (Test-Path "$InstallDir\mayfly.exe") {
+        $aliasChoice = "2"
+    } elseif (Test-Path "$InstallDir\mf.exe") {
+        $aliasChoice = "3"
+    } else {
+        $aliasChoice = "1"
+    }
+} elseif ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
     Write-Host "Choose command alias to install:"
     Write-Host "  [1] Both 'mayfly' and 'mf' (Recommended: press Enter)"
     Write-Host "  [2] Only 'mayfly'"
@@ -154,6 +164,7 @@ if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
         $aliasChoice = "1"
     }
 }
+
 
 if (!(Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null

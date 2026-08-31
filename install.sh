@@ -214,24 +214,37 @@ echo "================================================="
 echo ""
 
 
-# Prompt for command alias selection
-echo "Choose command alias to install:"
-echo "  [1] Both 'mayfly' and 'mf' (Recommended: press Enter)"
-echo "  [2] Only 'mayfly'"
-echo "  [3] Only 'mf'"
-echo ""
-
-ALIAS_CHOICE=""
-if [ -t 0 ]; then
-    read -p "Select option [1/2/3]: " -r ALIAS_CHOICE || ALIAS_CHOICE=1
-elif [ -c /dev/tty ]; then
-    read -p "Select option [1/2/3]: " -r ALIAS_CHOICE < /dev/tty 2>/dev/null || ALIAS_CHOICE=1
+# Configure command aliases (preserve on update, prompt on fresh install)
+if [ "$UPDATE" = true ]; then
+    if [ -f "${INSTALL_DIR}/mayfly" ] && [ -f "${INSTALL_DIR}/mf" ]; then
+        ALIAS_CHOICE=1
+    elif [ -f "${INSTALL_DIR}/mayfly" ]; then
+        ALIAS_CHOICE=2
+    elif [ -f "${INSTALL_DIR}/mf" ]; then
+        ALIAS_CHOICE=3
+    else
+        ALIAS_CHOICE=1
+    fi
 else
-    ALIAS_CHOICE=1
+    echo "Choose command alias to install:"
+    echo "  [1] Both 'mayfly' and 'mf' (Recommended: press Enter)"
+    echo "  [2] Only 'mayfly'"
+    echo "  [3] Only 'mf'"
+    echo ""
+
+    ALIAS_CHOICE=""
+    if [ -t 0 ]; then
+        read -p "Select option [1/2/3]: " -r ALIAS_CHOICE || ALIAS_CHOICE=1
+    elif [ -c /dev/tty ]; then
+        read -p "Select option [1/2/3]: " -r ALIAS_CHOICE < /dev/tty 2>/dev/null || ALIAS_CHOICE=1
+    else
+        ALIAS_CHOICE=1
+    fi
+    ALIAS_CHOICE="${ALIAS_CHOICE:-1}"
 fi
-ALIAS_CHOICE="${ALIAS_CHOICE:-1}"
 
 mkdir -p "${INSTALL_DIR}"
+
 
 # -------------------------------------------------------------
 # ACQUISITION: STRICT CRYPTOGRAPHIC RELEASE VERIFICATION
