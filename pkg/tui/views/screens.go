@@ -357,18 +357,50 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 			return false
 		}
 		if event.Type == terminal.KeyEnter {
-			nameStr := s.secretName.Value
+			nameStr := strings.TrimSpace(s.secretName.Value)
 			valStr := s.secretValue.Value
 
-			if s.editOrigName != "" && s.editOrigName != domain.SecretName(nameStr) {
+			// If user pasted KEY=VALUE into the name field, automatically split key and value:
+			if k, v, ok := strings.Cut(nameStr, "="); ok {
+				nameStr = strings.TrimSpace(k)
+				if valStr == "" {
+					valStr = v
+					s.secretValue.SetValue(valStr)
+				}
+			}
+			// Strip any accidental trailing '=' from secret name:
+			nameStr = strings.TrimSuffix(nameStr, "=")
+			s.secretName.SetValue(nameStr)
+
+			// If user is on Name field and Value is still empty, advance focus to Value field:
+			if s.secretName.Focused && valStr == "" && nameStr != "" {
+				s.secretName.Focused = false
+				s.secretValue.Focused = true
+				return false
+			}
+
+			if nameStr == "" {
+				s.SetStatus("Error: Secret name cannot be empty")
+				return false
+			}
+
+			secName := domain.SecretName(nameStr)
+			if err := secName.Validate(); err != nil {
+				s.SetStatus(fmt.Sprintf("Error: %v", err))
+				return false
+			}
+
+			if s.editOrigName != "" && s.editOrigName != secName {
 				_ = s.svc.DeleteSecret(ctx, s.selProject.ID, s.editOrigName)
 			}
 
-			if err := s.svc.SetSecret(ctx, s.selProject.ID, domain.SecretName(nameStr), valStr); err != nil {
+			if err := s.svc.SetSecret(ctx, s.selProject.ID, secName, valStr); err != nil {
 				s.SetStatus(fmt.Sprintf("Save error: %v", err))
 				return false
 			}
 
+			s.secretName.Clear()
+			s.secretValue.Clear()
 			s.mode = ModeProjectSecrets
 			s.reloadSecrets()
 			s.SetStatus(fmt.Sprintf("[OK] Saved secret '%s'", nameStr))

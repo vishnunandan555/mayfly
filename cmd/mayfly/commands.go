@@ -39,7 +39,22 @@ func cmdSet(ctx context.Context, svc *application.Service, args []string, stdin 
 		fmt.Fprintln(stderr, "usage: mayfly set <NAME> [VALUE]")
 		return 2
 	}
-	secName := domain.SecretName(args[0])
+
+	var rawName, val string
+	hasInlineVal := false
+	if name, inlineVal, ok := strings.Cut(args[0], "="); ok {
+		rawName = name
+		val = inlineVal
+		hasInlineVal = true
+	} else {
+		rawName = args[0]
+		if len(args) >= 2 {
+			val = strings.Join(args[1:], " ")
+			hasInlineVal = true
+		}
+	}
+
+	secName := domain.SecretName(rawName)
 	if err := secName.Validate(); err != nil {
 		fmt.Fprintf(stderr, "mayfly: %v\n", err)
 		return 1
@@ -55,7 +70,7 @@ func cmdSet(ctx context.Context, svc *application.Service, args []string, stdin 
 	f, isFile := stdin.(*os.File)
 	isTerm := isFile && terminal.IsTerminal(f)
 
-	if len(args) < 2 && !isTerm && os.Getenv("MAYFLY_FORCE_NONINTERACTIVE") != "1" && !isTesting() {
+	if !hasInlineVal && !isTerm && os.Getenv("MAYFLY_FORCE_NONINTERACTIVE") != "1" && !isTesting() {
 		fmt.Fprintln(stderr, "mayfly: 'set' requires an interactive terminal.")
 		fmt.Fprintln(stderr, "Secrets must be entered interactively by a human, or via the TUI ('mf c').")
 		return 1
@@ -72,37 +87,36 @@ func cmdSet(ctx context.Context, svc *application.Service, args []string, stdin 
 		return 1
 	}
 
-	var val string
-	if len(args) >= 2 {
-		val = strings.Join(args[1:], " ")
-	} else if isTerm {
-		term := terminal.NewTerminal(stdout, terminal.Size{Rows: 24, Columns: 80})
-		term.EnterAltScreen()
-		term.ClearScreen()
-		fmt.Fprintf(stdout, "\n\n  Enter value for %s: ", secName)
+	if !hasInlineVal {
+		if isTerm {
+			term := terminal.NewTerminal(stdout, terminal.Size{Rows: 24, Columns: 80})
+			term.EnterAltScreen()
+			term.ClearScreen()
+			fmt.Fprintf(stdout, "\n\n  Enter value for %s: ", secName)
 
-		val, err = readLine(stdin)
-		term.ExitAltScreen()
+			val, err = readLine(stdin)
+			term.ExitAltScreen()
 
-		if err != nil {
-			fmt.Fprintf(stderr, "mayfly: failed to read secret value: %v\n", err)
-			return 1
-		}
+			if err != nil {
+				fmt.Fprintf(stderr, "mayfly: failed to read secret value: %v\n", err)
+				return 1
+			}
 
-		if strings.TrimSpace(val) == "" {
-			fmt.Fprintln(stdout, "Key not created: value was empty.")
-			return 0
-		}
-	} else {
-		fmt.Fprintf(stdout, "Enter value for %s: ", secName)
-		val, err = readLine(stdin)
-		if err != nil {
-			fmt.Fprintf(stderr, "mayfly: failed to read secret value: %v\n", err)
-			return 1
-		}
-		if strings.TrimSpace(val) == "" {
-			fmt.Fprintln(stdout, "Key not created: value was empty.")
-			return 0
+			if strings.TrimSpace(val) == "" {
+				fmt.Fprintln(stdout, "Key not created: value was empty.")
+				return 0
+			}
+		} else {
+			fmt.Fprintf(stdout, "Enter value for %s: ", secName)
+			val, err = readLine(stdin)
+			if err != nil {
+				fmt.Fprintf(stderr, "mayfly: failed to read secret value: %v\n", err)
+				return 1
+			}
+			if strings.TrimSpace(val) == "" {
+				fmt.Fprintln(stdout, "Key not created: value was empty.")
+				return 0
+			}
 		}
 	}
 

@@ -36,11 +36,44 @@ func (s *StatusBar) Draw(f *terminal.Frame, bounds terminal.Rect) {
 		f.SetCell(bounds.Min.Row, c, terminal.Cell{Rune: ' ', Style: bgStyle})
 	}
 
+	totalWidth := bounds.Max.Column - bounds.Min.Column
+	if totalWidth <= 0 {
+		return
+	}
+
+	// If RightText contains an error or important notification, give it prominence:
+	if s.RightText != "" && s.RightText != "Ready" {
+		isErr := false
+		lower := s.RightText
+		if len(lower) > 0 && (lower[0] == 'E' || lower[0] == 'e' || len(lower) > 5 && lower[:5] == "Error" || len(lower) > 4 && lower[:4] == "Save") {
+			isErr = true
+		}
+
+		if isErr {
+			errStyle := terminal.Style{Foreground: terminal.ColorBrightWhite, Background: terminal.ColorBrightRed, Attributes: terminal.AttrBold}
+			for c := bounds.Min.Column; c < bounds.Max.Column; c++ {
+				f.SetCell(bounds.Min.Row, c, terminal.Cell{Rune: ' ', Style: errStyle})
+			}
+			msg := s.RightText
+			if len(msg) > totalWidth-2 {
+				msg = msg[:totalWidth-2]
+			}
+			f.DrawText(bounds.Min.Row, bounds.Min.Column+1, errStyle, msg)
+			return
+		}
+	}
+
 	f.DrawText(bounds.Min.Row, bounds.Min.Column+1, bgStyle, s.LeftText)
 	if s.RightText != "" {
 		col := bounds.Max.Column - len(s.RightText) - 1
 		if col > bounds.Min.Column+len(s.LeftText)+2 {
 			f.DrawText(bounds.Min.Row, col, bgStyle, s.RightText)
+		} else {
+			// Compact right text
+			avail := bounds.Max.Column - (bounds.Min.Column + len(s.LeftText) + 3)
+			if avail > 6 {
+				f.DrawText(bounds.Min.Row, bounds.Max.Column-avail-1, bgStyle, s.RightText[:avail])
+			}
 		}
 	}
 }

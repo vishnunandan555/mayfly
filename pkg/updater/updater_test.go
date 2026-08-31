@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"mayfly/pkg/domain"
 )
 
 func TestParseSemVerAndCompare(t *testing.T) {
@@ -41,6 +43,10 @@ func TestParseSemVerAndCompare(t *testing.T) {
 }
 
 func TestCheckForUpdatesWithMockServer(t *testing.T) {
+	origVersion := domain.Version
+	domain.Version = "0.0.1"
+	defer func() { domain.Version = origVersion }()
+
 	mockRelease := ReleaseInfo{
 		TagName:     "v0.0.2",
 		Name:        "MayFly v0.0.2",
