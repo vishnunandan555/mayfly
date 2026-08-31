@@ -736,6 +736,8 @@ func (s *Screens) Draw(frame *terminal.Frame) {
 		dialogLeft := bodyRect.Min.Column + (bodyRect.Max.Column-bodyRect.Min.Column-dialogWidth)/2
 		dialogRect := terminal.NewRect(dialogTop, dialogLeft, dialogHeight, dialogWidth)
 
+		// Fill inside of modal so background grid doesn't bleed through
+		frame.FillRect(dialogRect, ' ', terminal.Style{})
 		frame.DrawBox(dialogRect, terminal.Style{Foreground: terminal.ColorBrightCyan, Attributes: terminal.AttrBold}, "INITIALIZE NEW PROJECT VAULT")
 		frame.DrawText(dialogRect.Min.Row+2, dialogRect.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightWhite}, "Select directory to initialize with MayFly:")
 
@@ -770,7 +772,10 @@ func (s *Screens) Draw(frame *terminal.Frame) {
 
 	case ModeDeleteProjectPassword:
 		s.projectGrid.Draw(frame, bodyRect)
-		dialogWidth := 58
+		dialogWidth := len(s.deleteProjName) + 38
+		if dialogWidth < 56 {
+			dialogWidth = 56
+		}
 		if dialogWidth > bounds.Max.Column-bounds.Min.Column-6 {
 			dialogWidth = bounds.Max.Column - bounds.Min.Column - 6
 		}
@@ -779,6 +784,8 @@ func (s *Screens) Draw(frame *terminal.Frame) {
 		dialogLeft := bodyRect.Min.Column + (bodyRect.Max.Column-bodyRect.Min.Column-dialogWidth)/2
 		passBox := terminal.NewRect(dialogTop, dialogLeft, dialogHeight, dialogWidth)
 
+		// Fill inside of modal so background grid doesn't bleed through
+		frame.FillRect(passBox, ' ', terminal.Style{})
 		frame.DrawBox(passBox, terminal.Style{Foreground: terminal.ColorBrightRed, Attributes: terminal.AttrBold}, "CONFIRM PROJECT VAULT DELETION")
 		frame.DrawText(passBox.Min.Row+1, passBox.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightYellow}, fmt.Sprintf("Enter master password to delete '%s':", s.deleteProjName))
 		inputRect := terminal.NewRect(passBox.Min.Row+3, passBox.Min.Column+3, 3, passBox.Max.Column-passBox.Min.Column-6)

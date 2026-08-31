@@ -181,6 +181,15 @@ func (f *Frame) DrawBox(r Rect, style Style, title string) {
 	}
 }
 
+// FillRect fills the specified rectangle area with a character and style.
+func (f *Frame) FillRect(r Rect, char rune, style Style) {
+	for row := r.Min.Row; row < r.Max.Row; row++ {
+		for col := r.Min.Column; col < r.Max.Column; col++ {
+			f.SetCell(row, col, Cell{Rune: char, Style: style})
+		}
+	}
+}
+
 func RuneWidth(r rune) int {
 	if r < 32 || (r >= 127 && r < 160) {
 		return 0

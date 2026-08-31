@@ -82,26 +82,40 @@ func (c *ConfirmDialog) Draw(f *terminal.Frame, bounds terminal.Rect) {
 		return
 	}
 
-	dialogWidth := 50
+	reqWidth := len(c.Message) + 8
+	if len(c.Title)+8 > reqWidth {
+		reqWidth = len(c.Title) + 8
+	}
+	if reqWidth < 46 {
+		reqWidth = 46
+	}
+	maxWidth := bounds.Max.Column - bounds.Min.Column - 4
+	if maxWidth < 20 {
+		maxWidth = 20
+	}
+	if reqWidth > maxWidth {
+		reqWidth = maxWidth
+	}
+
+	dialogWidth := reqWidth
 	dialogHeight := 7
 	startRow := bounds.Min.Row + (bounds.Max.Row-bounds.Min.Row-dialogHeight)/2
 	startCol := bounds.Min.Column + (bounds.Max.Column-bounds.Min.Column-dialogWidth)/2
 
 	modalRect := terminal.NewRect(startRow, startCol, dialogHeight, dialogWidth)
 
-	// Dim background
-	for r := bounds.Min.Row; r < bounds.Max.Row; r++ {
-		for col := bounds.Min.Column; col < bounds.Max.Column; col++ {
-			if !modalRect.Contains(terminal.Point{Row: r, Column: col}) {
-				f.SetCell(r, col, terminal.Cell{Rune: ' ', Style: terminal.Style{Background: terminal.ColorBlack}})
-			}
-		}
-	}
+	// Cleanly fill the inside of the modal dialog so underlying cards don't bleed through
+	f.FillRect(modalRect, ' ', terminal.Style{})
 
 	boxStyle := terminal.Style{Foreground: terminal.ColorBrightRed, Attributes: terminal.AttrBold}
 	f.DrawBox(modalRect, boxStyle, c.Title)
 
-	f.DrawText(modalRect.Min.Row+2, modalRect.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightWhite}, c.Message)
+	msg := c.Message
+	if len(msg) > dialogWidth-6 {
+		msg = msg[:dialogWidth-6]
+	}
+	msgCol := modalRect.Min.Column + (dialogWidth-len(msg))/2
+	f.DrawText(modalRect.Min.Row+2, msgCol, terminal.Style{Foreground: terminal.ColorBrightWhite}, msg)
 
 	btnRow := modalRect.Min.Row + 4
 
@@ -114,6 +128,12 @@ func (c *ConfirmDialog) Draw(f *terminal.Frame, bounds terminal.Rect) {
 		noStyle = terminal.Style{Foreground: terminal.ColorBlack, Background: terminal.ColorBrightCyan, Attributes: terminal.AttrBold}
 	}
 
-	f.DrawText(btnRow, modalRect.Min.Column+12, yesStyle, " [ Yes ] ")
-	f.DrawText(btnRow, modalRect.Min.Column+28, noStyle, " [ Cancel ] ")
+	yesBtn := " [ Yes ] "
+	cancelBtn := " [ Cancel ] "
+	gap := 4
+	totalBtnWidth := len(yesBtn) + len(cancelBtn) + gap
+	btnCol := modalRect.Min.Column + (dialogWidth-totalBtnWidth)/2
+
+	f.DrawText(btnRow, btnCol, yesStyle, yesBtn)
+	f.DrawText(btnRow, btnCol+len(yesBtn)+gap, noStyle, cancelBtn)
 }
