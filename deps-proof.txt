@@ -1,6 +1,6 @@
 === Zero-Dependency Manifest Verification ===
-Date: Monday 31 August 2026 08:48:49 AM UTC
-Go Version: go version go1.26.7-X:nodwarf5 linux/amd64
+Date: Mon Aug 31 09:24:40 AM UTC 2026
+Go Version: go version go1.27.0 linux/amd64
 
 --- go list -m all ---
 mayfly

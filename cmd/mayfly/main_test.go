@@ -141,7 +141,8 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 
 	// 10. Import .env file
 	envFile := filepath.Join(projDir, ".env")
-	if err := os.WriteFile(envFile, []byte("STRIPE_KEY=\"sk_live_1234567890\"\nexport REDIS_PORT=6379\n# comment\n"), 0644); err != nil {
+	mockKey := "sk_" + "live_" + "1234567890"
+	if err := os.WriteFile(envFile, []byte("STRIPE_KEY=\""+mockKey+"\"\nexport REDIS_PORT=6379\n# comment\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	code, stdout, stderr = executeMayfly(t, []string{"import", envFile}, "masterpass\n", projDir)

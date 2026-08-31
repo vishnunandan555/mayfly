@@ -131,8 +131,8 @@ func (s *Scanner) Scan(ctx context.Context, rootDir string) ([]domain.ScanFindin
 			return nil
 		}
 
-		// Check dangerous file names (.env, credentials)
-		if strings.HasPrefix(base, ".env") || base == "credentials.json" || base == "id_rsa" || base == "id_ed25519" {
+// Check dangerous file names (.env, credentials, private keys), excluding template/example files
+		if isDangerousConfigFile(base) {
 			findings = append(findings, domain.ScanFinding{
 				Path:     relPath,
 				Line:     1,
@@ -190,9 +190,27 @@ func (s *Scanner) scanFile(fullPath, relPath string) ([]domain.ScanFinding, erro
 			return nil, nil // Skip binary files
 		}
 
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {
+			continue // Skip pure comments and empty lines
+		}
+
 		for _, p := range tokenPatterns {
 			loc := p.regex.FindStringIndex(line)
 			if loc != nil {
+				matchedStr := line[loc[0]:loc[1]]
+
+				// For token-assignment heuristics, filter out safe placeholders / localhost URLs:
+				if p.category == "token-assignment" {
+					parts := strings.SplitN(matchedStr, "=", 2)
+					if len(parts) < 2 {
+						parts = strings.SplitN(matchedStr, ":", 2)
+					}
+					if len(parts) == 2 && isPlaceholderValue(parts[1]) {
+						continue
+					}
+				}
+
 				findings = append(findings, domain.ScanFinding{
 					Path:     relPath,
 					Line:     lineNum,
@@ -206,6 +224,88 @@ func (s *Scanner) scanFile(fullPath, relPath string) ([]domain.ScanFinding, erro
 	}
 
 	return findings, scanner.Err()
+}
+
+// isTemplateFile identifies files intended as documentation templates or example schemas.
+func isTemplateFile(filename string) bool {
+	lower := strings.ToLower(filename)
+	exts := []string{".example", ".sample", ".template", ".dist", ".default", ".tmpl"}
+	for _, ext := range exts {
+		if strings.HasSuffix(lower, ext) {
+			return true
+		}
+	}
+	return false
+}
+
+// isDangerousConfigFile checks if a file name represents an active plaintext secret or key file.
+func isDangerousConfigFile(filename string) bool {
+	if isTemplateFile(filename) {
+		return false
+	}
+	lower := strings.ToLower(filename)
+	if strings.HasPrefix(lower, ".env") ||
+		lower == "credentials.json" ||
+		lower == "id_rsa" ||
+		lower == "id_ed25519" ||
+		lower == "id_ecdsa" ||
+		lower == "id_dsa" ||
+		lower == "service-account.json" ||
+		lower == "service_account.json" {
+		return true
+	}
+	return false
+}
+
+// isPlaceholderValue checks if an assigned value is a harmless placeholder, local URL, or dummy string.
+func isPlaceholderValue(val string) bool {
+	v := strings.Trim(strings.TrimSpace(val), "\"'`")
+	if v == "" {
+		return true
+	}
+	lower := strings.ToLower(v)
+
+	// Localhost / development loopback URLs
+	if strings.HasPrefix(lower, "http://localhost") ||
+		strings.HasPrefix(lower, "https://localhost") ||
+		strings.HasPrefix(lower, "http://127.0.0.1") ||
+		strings.HasPrefix(lower, "https://127.0.0.1") ||
+		strings.HasPrefix(lower, "localhost:") ||
+		strings.HasPrefix(lower, "127.0.0.1:") ||
+		strings.HasPrefix(lower, "http://0.0.0.0") ||
+		strings.HasPrefix(lower, "0.0.0.0:") {
+		return true
+	}
+
+	// Placeholder templates like <YOUR_KEY>, ${KEY}, {{KEY}}, %KEY%, $KEY
+	if (strings.HasPrefix(v, "<") && strings.HasSuffix(v, ">")) ||
+		(strings.HasPrefix(v, "${") && strings.HasSuffix(v, "}")) ||
+		(strings.HasPrefix(v, "{{") && strings.HasSuffix(v, "}}")) ||
+		(strings.HasPrefix(v, "%") && strings.HasSuffix(v, "%")) ||
+		strings.HasPrefix(v, "$") {
+		return true
+	}
+
+	// Explicit dummy placeholder values
+	exactDummies := map[string]bool{
+		"your-api-key": true, "your_api_key": true, "your-secret": true, "your_secret": true,
+		"your-token": true, "your_token": true, "your-password": true, "your_password": true,
+		"your-key-here": true, "your_key_here": true, "your-api-key-here": true,
+		"changeme": true, "change_me": true, "change-me": true, "replace_me": true, "replace-me": true,
+		"dummy": true, "placeholder": true, "example": true, "xxx": true, "xxxx": true,
+		"none": true, "null": true, "undefined": true, "true": true, "false": true, "0": true,
+	}
+	if exactDummies[lower] {
+		return true
+	}
+
+	if strings.HasPrefix(lower, "your-") || strings.HasPrefix(lower, "your_") ||
+		strings.HasPrefix(lower, "replace-") || strings.HasPrefix(lower, "replace_") ||
+		strings.HasPrefix(lower, "insert-") || strings.HasPrefix(lower, "insert_") {
+		return true
+	}
+
+	return false
 }
 
 func errorsIsDone(err error) bool {
