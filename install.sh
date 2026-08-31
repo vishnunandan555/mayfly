@@ -81,9 +81,6 @@ fi
 # -------------------------------------------------------------
 # INSTALL / UPDATE MODE
 # -------------------------------------------------------------
-if [ -e /dev/tty ]; then
-    exec < /dev/tty
-fi
 
 # Detect OS and Architecture
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -137,7 +134,15 @@ echo "  [1] Both 'mayfly' and 'mf' (Recommended — press Enter)"
 echo "  [2] Only 'mayfly'"
 echo "  [3] Only 'mf'"
 echo ""
-read -p "Select option [1/2/3]: " -r ALIAS_CHOICE
+
+ALIAS_CHOICE=""
+if [ -t 0 ]; then
+    read -p "Select option [1/2/3]: " -r ALIAS_CHOICE 2>/dev/null || ALIAS_CHOICE=1
+elif [ -e /dev/tty ] && [ -r /dev/tty ]; then
+    read -p "Select option [1/2/3]: " -r ALIAS_CHOICE < /dev/tty 2>/dev/null || ALIAS_CHOICE=1
+else
+    ALIAS_CHOICE=1
+fi
 ALIAS_CHOICE="${ALIAS_CHOICE:-1}"
 
 mkdir -p "${INSTALL_DIR}"
@@ -249,7 +254,14 @@ case ":$PATH:" in
         if [ -n "$RC_FILE" ]; then
             echo ""
             echo "Note: '${INSTALL_DIR}' is not currently in your system PATH."
-            read -p "Add '${INSTALL_DIR}' to $(basename "$RC_FILE")? [Y/n]: " -r ADD_PATH_RESP
+            ADD_PATH_RESP=""
+            if [ -t 0 ]; then
+                read -p "Add '${INSTALL_DIR}' to $(basename "$RC_FILE")? [Y/n]: " -r ADD_PATH_RESP 2>/dev/null || ADD_PATH_RESP="y"
+            elif [ -e /dev/tty ] && [ -r /dev/tty ]; then
+                read -p "Add '${INSTALL_DIR}' to $(basename "$RC_FILE")? [Y/n]: " -r ADD_PATH_RESP < /dev/tty 2>/dev/null || ADD_PATH_RESP="y"
+            else
+                ADD_PATH_RESP="y"
+            fi
             ADD_PATH_RESP="${ADD_PATH_RESP:-y}"
 
             if [[ "$ADD_PATH_RESP" =~ ^[Yy]$ ]]; then
