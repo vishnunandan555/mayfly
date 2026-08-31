@@ -50,11 +50,27 @@ irm https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.ps1 | 
 *Auto-verifies SHA-256 checksums via `Get-FileHash` before placing `mayfly.exe` and `mf.exe` into User PATH.*
 
 ### Offline Build from Source (0 External Dependencies):
+
+#### Native PowerShell / cmd.exe (recommended on Windows):
+```powershell
+git clone https://github.com/vishnunandan555/mayfly.git
+cd mayfly
+$binDir = Join-Path $env:USERPROFILE ".local\bin"
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+$env:CGO_ENABLED = "0"
+go build -trimpath -ldflags="-s -w -buildid=" -o (Join-Path $binDir "mayfly.exe") .\cmd\mayfly
+Copy-Item (Join-Path $binDir "mayfly.exe") (Join-Path $binDir "mf.exe")
+$env:Path += ";$binDir"
+```
+
+#### Make-based build (Git Bash / MSYS2 / WSL / `choco install make`):
 ```bash
 git clone https://github.com/vishnunandan555/mayfly.git
 cd mayfly
 make install
 ```
+
+> `make` targets depend on Unix tooling (`mkdir -p`, `ln -sf`, `sha256sum`, `$(HOME)`) and are not native to plain `cmd.exe` or PowerShell without Git Bash/MSYS2/WSL or a Windows `make` installation.
 
 ---
 

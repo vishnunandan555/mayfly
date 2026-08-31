@@ -30,12 +30,26 @@ irm https://raw.githubusercontent.com/vishnunandan555/mayfly/main/install.ps1 | 
   </Tab>
 
   <Tab value="Source & Go">
+```powershell
+# Native Windows PowerShell build (recommended)
+git clone https://github.com/vishnunandan555/mayfly.git
+cd mayfly
+$binDir = Join-Path $env:USERPROFILE ".local\bin"
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+$env:CGO_ENABLED = "0"
+go build -trimpath -ldflags="-s -w -buildid=" -o (Join-Path $binDir "mayfly.exe") .\cmd\mayfly
+Copy-Item (Join-Path $binDir "mayfly.exe") (Join-Path $binDir "mf.exe")
+$env:Path += ";$binDir"
+```
+
 ```bash
-# Build & install locally from source
+# Makefile path (Git Bash / MSYS2 / WSL or choco install make)
 git clone https://github.com/vishnunandan555/mayfly.git
 cd mayfly
 make install
 ```
+
+> `make` targets require Git Bash/MSYS2/WSL or `choco install make`; on native PowerShell/cmd use the commands above instead.
   </Tab>
 </Tabs>
 
