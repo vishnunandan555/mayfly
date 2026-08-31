@@ -29,7 +29,7 @@ There are zero external module requirements, zero indirect dependencies, and zer
 
 ## Standard Library Substitution Matrix (STDLIB.md)
 
-MayFly implements 12 distinct subsystems using exclusively Go standard library primitives:
+MayFly implements 13 distinct subsystems using exclusively Go standard library primitives:
 
 | # | Subsystem Replaced | External Packages Replaced | Go Stdlib Replacement Primitives | Architectural Details |
 | :--- | :--- | :--- | :--- | :--- |
@@ -45,6 +45,7 @@ MayFly implements 12 distinct subsystems using exclusively Go standard library p
 | **10** | **ANSI Styling & Colors** | `fatih/color`, `mgutz/ansi`, `chalk` | Hand-crafted ANSI SGR sequence builder, `NO_COLOR` | 16-color ANSI builder with attribute masking (bold, dim, underline, reverse) respecting the `NO_COLOR` spec. |
 | **11** | **Unicode Rune Widths** | `mattn/go-runewidth` | `unicode/utf8`, East Asian width range checks | Computes exact terminal cell column widths for East Asian, wide characters, and emojis for double-buffered alignment. |
 | **12** | **Clipboard Controller** | `atotto/clipboard`, `x/clipboard` | `encoding/base64`, ANSI OSC 52 escape sequences | Emits pure ANSI OSC 52 clipboard sequences directly to terminal `stdout` with graceful fallback to OS utilities. |
+| **13** | **Self-Updating Engine** | `go-selfupdate`, `go-github-selfupdate` | `net/http`, `crypto/sha256`, `os.Rename` | Checks GitHub releases, verifies SHA-256 checksums, and performs atomic binary swap without curl or external scripts. |
 
 ---
 
@@ -57,6 +58,7 @@ MayFly eliminates reliance on popular external packages commonly pulled into Go 
 - **`bubbletea` / `tview`** *(1M+ weekly downloads)*: Replaced by double-buffered 2D TUI engine in `pkg/tui`.
 - **`fatih/color` / `chalk`**: Replaced by custom ANSI SGR generator in `pkg/tui/terminal`.
 - **`atotto/clipboard`**: Replaced by ANSI OSC 52 escape sequences in `pkg/tui/terminal`.
+- **`trufflehog` / `gitleaks`**: Replaced by bounded filesystem crawler in `pkg/scanner`.
 
 ---
 
@@ -73,8 +75,8 @@ Verification Output:
 Verifying bit-for-bit reproducible build...
 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -buildid=" -o bin/repro1/mayfly ./cmd/mayfly
 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -buildid=" -o bin/repro2/mayfly ./cmd/mayfly
-34a93967e7a8dbdadc649dbfeecde1d36b816e3627aed480c09876e8acb582ec  bin/repro1/mayfly
-34a93967e7a8dbdadc649dbfeecde1d36b816e3627aed480c09876e8acb582ec  bin/repro2/mayfly
+a1c3e47019f2a41d9836dc369b6e5321a29f9d8d60ebe7d7e72151191dcfe6f0  bin/repro1/mayfly
+a1c3e47019f2a41d9836dc369b6e5321a29f9d8d60ebe7d7e72151191dcfe6f0  bin/repro2/mayfly
 [OK] REPRODUCIBLE BUILD VERIFIED: Byte-identical outputs!
 ```
 
@@ -104,3 +106,12 @@ To inspect all package imports across the entire tree:
 ```bash
 go list -f '{{.ImportPath}}: {{.Imports}}' ./...
 ```
+
+---
+
+## Next Steps
+
+- [Security Model & Cryptography](/docs/architecture/security-model): AES-256-GCM and PBKDF2 encryption details.
+- [Terminal UI Engine](/docs/reference/tui): Architecture of the double-buffered 2D canvas.
+- [CLI Reference](/docs/cli/overview): All CLI commands, flags, and options.
+

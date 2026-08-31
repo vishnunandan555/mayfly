@@ -1,0 +1,121 @@
+---
+title: Terminal UI (TUI) Engine
+description: Architecture of MayFly's zero-dependency double-buffered 2D terminal interface and ANSI streaming parser.
+icon: Layout
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+
+MayFly features a complete, standalone Terminal User Interface (TUI) built **100% from scratch** using only the Go standard library (`os`, `syscall`, `bytes`, `unicode/utf8`, `io`). It requires no third-party frameworks like Bubble Tea or tview.
+
+---
+
+## TUI Architecture
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                       os.Stdin                              │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Raw Byte Stream
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│            Streaming ANSI Parser (parser.go)                │
+│   • Decodes Escape sequences (\x1b[A, \x1b[B, etc.)         │
+│   • Assembles multi-byte UTF-8 runes                        │
+│   • Dispatches typed KeyEvents (Up, Down, Enter, Esc)       │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Event Loop
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 View Router & State Machine                 │
+│   • Card Grid View (Project selection)                      │
+│   • Project Secrets Detail View                             │
+│   • Input Modal & Confirmation Dialogs                      │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Draw() Frame
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│            Double-Buffered 2D Canvas (terminal.go)          │
+│   • Front buffer & Back buffer comparison                   │
+│   • Differential diff rendering to minimize flicker         │
+│   • East Asian & Emoji cell width calculations              │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Flush()
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│              os.Stdout (ANSI SGR Escape Codes)              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Core Components
+
+### 1. Low-Level Terminal Discipline (`raw_*.go`)
+Direct OS system calls place the terminal into raw non-canonical mode:
+- **Linux/macOS**: Direct `syscall.SYS_IOCTL` manipulating `termios` flags (`TCGETS`/`TCSETS`). Disables `ECHO`, `ICANON`, and signal processing.
+- **Windows**: Windows Console API (`GetConsoleMode`, `SetConsoleMode`) enabling `ENABLE_VIRTUAL_TERMINAL_PROCESSING`.
+
+### 2. Double-Buffered 2D Canvas (`terminal.go`)
+- Maintains a 2D matrix of terminal cells containing character runes, foreground colors, background colors, and styling attributes (Bold, Dim, Reverse, Underline).
+- Renders frames to an in-memory `bytes.Buffer` before writing to `os.Stdout` in a single atomic flush, completely preventing screen tearing and flickering.
+
+### 3. Streaming ANSI Parser (`parser.go`)
+A finite-state machine that parses incoming bytes from `os.Stdin`:
+- Distinguishes between standalone `Esc` keys and escape sequence prefixes (`\x1b[`).
+- Decodes arrow keys (`↑`, `↓`, `←`, `→`), function keys, PageUp/PageDown, Home/End, Tab, Shift-Tab, and Enter.
+- Assembles multi-byte UTF-8 runes on the fly.
+
+### 4. ANSI OSC 52 System Clipboard (`clipboard.go`)
+- Copies secret values to the operating system clipboard by emitting standard **ANSI OSC 52** escape sequences (`\x1b]52;c;<base64>\x07`) to standard output.
+- Supported natively in modern terminal emulators (iTerm2, Alacritty, Ghostty, Kitty, Windows Terminal, VS Code Terminal) with zero external binaries required.
+
+---
+
+## Keyboard Shortcuts & Navigation
+
+| Key | Global Action | Secrets View Action |
+| :--- | :--- | :--- |
+| `↑` / `↓` / `←` / `→` | Navigate project cards grid | Navigate secrets list |
+| `Enter` | Open selected project | Edit secret value / Open detail |
+| `N` | Initialize new project directory | Add new secret to current project |
+| `C` | Copy project path | Copy secret value to OS clipboard |
+| `V` | — | Reveal / Mask secret value (`••••••`) |
+| `D` | Delete project registration | Delete selected secret |
+| `S` | Run plaintext credential scanner | Run scanner on current project |
+| `A` | View cryptographic audit log | View audit log |
+| `B` | Export encrypted vault backup | Export project backup |
+| `Esc` / `Q` | Exit TUI | Back to Project Cards Grid |
+
+---
+
+## Launch Modes
+
+<Tabs items={['Global Workspace Grid', 'Scoped Project View']}>
+  <Tab value="Global Workspace Grid">
+```bash
+# Opens the full multi-project interactive dashboard from any folder
+mf
+# or
+mayfly
+```
+  </Tab>
+
+  <Tab value="Scoped Project View">
+```bash
+# Opens directly into the secrets list for the current repository
+mf c
+# or
+mf current
+```
+  </Tab>
+</Tabs>
+
+---
+
+## Next Steps
+
+- [Zero-Dependency Audit](/docs/reference/zero-dependency-audit): Detailed standard library substitution matrix.
+- [Security Model & Cryptography](/docs/architecture/security-model): AES-256-GCM and PBKDF2 encryption details.
+- [CLI Reference](/docs/cli/overview): Guide to all non-interactive CLI commands.

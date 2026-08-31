@@ -59,3 +59,12 @@ Even if symbolic links or relative paths are used, MayFly resolves the canonical
 ## Memory Cleanup
 
 Decrypted secret byte slices are released upon process termination. When the child process exits, MayFly's memory pages containing decrypted values are freed, preventing persistence in lingering daemons.
+
+---
+
+## Next Steps
+
+- [Cryptographic Audit Chain](/docs/architecture/audit-chain): How execution events are recorded.
+- [Security Model & Cryptography](/docs/architecture/security-model): AES-256-GCM AEAD details.
+- [CLI Reference: Run](/docs/cli/run): Complete CLI flags for the `run` command.
+

@@ -24,37 +24,45 @@
 
 ---
 
+<p align="center">
+  <a href="docs/"><strong>Explore Full Documentation →</strong></a> |
+  <a href="STDLIB.md"><strong>Zero-Dependency Matrix (STDLIB.md) →</strong></a> |
+  <a href="deps-proof.txt"><strong>Dependency Verification Proof →</strong></a>
+</p>
+
+---
+
 ## The Problem MayFly Solves
 
-Most developers store secrets in plaintext `.env` files inside their project directories:
+Modern development workflows rely heavily on plaintext `.env` files stored directly on disk:
+
 ```env
 STRIPE_SECRET_KEY=sk_live_9876543210
 DATABASE_URL=postgres://admin:pass@localhost:5432/production
 OPENAI_API_KEY=sk-proj-1234567890
 ```
 
-**The Threat:** Whenever you run `npm install`, `pip install`, or `cargo build`, third-party supply-chain malware can scan your filesystem, read the `.env` file, and exfiltrate your production credentials before your application even starts.
+### The Vulnerability: Disk-Bound Plaintext Secrets
+When you execute `npm install`, `pip install`, or `cargo build`, third-party packages and install scripts run with full user privileges. Malicious dependencies or compromised supply-chain packages can quietly traverse your workspace, scrape `.env` files from disk, and exfiltrate production credentials before your application code ever starts.
 
-**MayFly's Solution:** Never write `.env` files to disk. All secrets are stored in a single authenticated binary vault (`~/.mayfly/vault.enc`) encrypted with **AES-256-GCM** and derived via **RFC 8018 PBKDF2** (600,000 iterations). When you launch your application (`mf npm start` or `mayfly npm start`), MayFly decrypts secrets directly into **volatile memory (RAM)**, attaches them to the child process environment, and immediately zeroes memory buffers when the process exits.
+### The MayFly Paradigm: Zero-Disk, Memory-Only Secret Lifecycle
+MayFly eliminates `.env` files from your filesystem entirely:
+
+1. **Authenticated Encrypted Storage**: All project secrets are encrypted at rest in a single binary vault (`~/.mayfly/vault.enc`) using **AES-256-GCM** authenticated encryption, protected by an **RFC 8018 PBKDF2-HMAC-SHA256** key derivation function (600,000 iterations).
+2. **Volatile RAM Injection**: When you execute `mf <command>` (e.g., `mf npm run dev` or `mf python app.py`), MayFly decrypts the required secrets directly into **volatile memory (RAM)** and overlays them into the spawned child process environment.
+3. **Guaranteed Zero-Disk Footprint**: Secrets never touch the disk. When the process terminates, all in-memory buffers are immediately overwritten with zeros via memory zeroization routines. File scrapers find zero credentials on disk.
 
 ```text
-┌── [LIVE WORKFLOW DEMONSTRATION] ────────────────────────────────────────────────┐
-│ $ mf set STRIPE_SECRET=sk_live_9a8b7c6d5e4f3a2b1c                               │
-│ [saved] Secret STRIPE_SECRET encrypted to vault (AES-256-GCM)                   │
-│                                                                                 │
-│ $ mf npm run dev                                                                │
-│ [mayfly] unlocked vault in memory (600,000 PBKDF2 iterations)                   │
-│ [mayfly] injected 3 secret(s) directly into volatile RAM                        │
-│                                                                                 │
-│ > my-app@0.1.0 dev                                                              │
-│ > next dev                                                                      │
-│   ▲ Next.js 15.5.24 - Local: http://localhost:3000                              │
-│   ✓ Ready in 1.2s (Secrets active in process.env)                               │
-│                                                                                 │
-│ $ cat .env                                                                      │
-│ cat: .env: No such file or directory  ← (Malicious package scanners find 0 keys)│
-└─────────────────────────────────────────────────────────────────────────────────┘
+┌── [EPHEMERAL EXECUTION FLOW] ───────────────────────────────────────────────────────────┐
+│ 1. Developer runs:           $ mf npm run dev                                           │
+│ 2. MayFly unlocks vault:     AES-256-GCM decrypted in RAM (0 disk writes)               │
+│ 3. Child process spawned:    Next.js / Node / Python receives secrets in process.env    │
+│ 4. Filesystem state:         0 plaintext .env files on disk (Scrapers find nothing)     │
+│ 5. Process termination:      Memory buffers zeroed immediately                          │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+> 📚 **Deep Dive in the Docs:** For an in-depth threat analysis, attack trees, and OS security boundaries, see the [Why MayFly & Threat Model Documentation](docs/content/docs/why-mayfly.mdx).
 
 ---
 
@@ -248,7 +256,22 @@ mayfly/
 └── Makefile                    # One-command build & testing
 ```
 
-See [STDLIB.md](STDLIB.md) for the complete 12-entry substitution matrix.
+See [STDLIB.md](STDLIB.md) for the complete 13-entry standard library substitution matrix.
+
+---
+
+## Documentation Hub
+
+Explore the full interactive documentation, security architecture, and language integration guides in [`docs/`](docs/):
+
+| Guide / Reference | Description | Link |
+| :--- | :--- | :--- |
+| 🚀 **Quickstart** | 2-minute setup, installation, and first secret injection | [Quickstart Guide](docs/content/docs/quickstart.mdx) |
+| 🛡️ **Why MayFly & Threat Model** | In-depth analysis of supply-chain attacks & memory isolation | [Security Architecture](docs/content/docs/why-mayfly.mdx) |
+| 🧠 **Core Architecture** | Vault format, binary layout, KDF derivation, and inode identity | [Security Model & Internals](docs/content/docs/architecture/security-model.mdx) |
+| 💻 **CLI Reference** | Complete guide to all 12 CLI subcommands and options | [CLI Command Overview](docs/content/docs/cli/overview.mdx) |
+| 🌐 **Universal Framework Guides** | Integration guides for Node.js, Python, Go, Rust, Docker, and more | [Language Guides](docs/content/docs/guides/universal.mdx) |
+| 🔬 **Zero-Dependency Audit** | Comprehensive standard library substitution matrix and audit | [Zero-Dep Audit](docs/content/docs/reference/zero-dependency-audit.mdx) |
 
 ---
 

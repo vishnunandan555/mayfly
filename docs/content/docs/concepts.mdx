@@ -97,3 +97,12 @@ Hash[N] = SHA256(Hash[N-1] + ":" + Timestamp + ":" + Action + ":" + Data)
 
 If any entry in `~/.mayfly/audit.log` is modified, deleted, or truncated, `mf audit verify` will detect the broken cryptographic link immediately.
 
+---
+
+## Next Steps
+
+- [Security Model & Cryptography](/docs/architecture/security-model): PBKDF2 parameters, AES-256-GCM AEAD, and container layout.
+- [In-Memory Injection Architecture](/docs/architecture/in-memory-injection): Process spawning and memory lifecycle.
+- [CLI Reference](/docs/cli/overview): Guide to all MayFly CLI commands.
+
+

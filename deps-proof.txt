@@ -1,7 +1,6 @@
 === Zero-Dependency Manifest Verification ===
-Date: Monday 31 August 2026 09:30:00 AM UTC
-Go Version: go version go1.26.7 linux/amd64
-
+Date: Monday 31 August 2026 11:46:35 AM UTC
+Go Version: go version go1.26.7-X:nodwarf5 linux/amd64
 
 --- go list -m all ---
 mayfly
@@ -13,7 +12,7 @@ go 1.22
 
 --- Package Import Tree ---
 mayfly/cmd/mayfly: [context encoding/json errors flag fmt io mayfly/pkg/application mayfly/pkg/audit mayfly/pkg/domain mayfly/pkg/executor mayfly/pkg/project mayfly/pkg/scanner mayfly/pkg/tui mayfly/pkg/tui/terminal mayfly/pkg/updater mayfly/pkg/vault os path/filepath strings]
-mayfly/pkg/application: [bufio context errors fmt mayfly/pkg/audit mayfly/pkg/domain mayfly/pkg/executor mayfly/pkg/project mayfly/pkg/scanner mayfly/pkg/vault runtime strings sync time]
+mayfly/pkg/application: [bufio context errors fmt mayfly/pkg/audit mayfly/pkg/domain mayfly/pkg/executor mayfly/pkg/project mayfly/pkg/scanner mayfly/pkg/vault os runtime sort strings sync time]
 mayfly/pkg/audit: [bufio context crypto/sha256 encoding/hex encoding/json errors fmt mayfly/pkg/domain os path/filepath sync time]
 mayfly/pkg/domain: [errors strings time unicode]
 mayfly/pkg/executor: [context errors fmt io mayfly/pkg/domain os os/exec os/signal runtime sort strings syscall]
@@ -24,6 +23,5 @@ mayfly/pkg/tui/layout: [mayfly/pkg/tui/terminal]
 mayfly/pkg/tui/terminal: [bytes encoding/base64 fmt io os os/exec os/signal runtime strings syscall unicode/utf8 unsafe]
 mayfly/pkg/tui/views: [context fmt mayfly/pkg/application mayfly/pkg/domain mayfly/pkg/tui/layout mayfly/pkg/tui/terminal mayfly/pkg/tui/widget path/filepath strings time]
 mayfly/pkg/tui/widget: [fmt mayfly/pkg/domain mayfly/pkg/tui/terminal path/filepath]
-mayfly/pkg/updater: [context crypto/sha256 encoding/hex encoding/json fmt io mayfly/pkg/domain net/http os path/filepath runtime strconv strings time]
+mayfly/pkg/updater: [bufio context crypto/sha256 encoding/json fmt io mayfly/pkg/domain net/http os path/filepath runtime strconv strings time]
 mayfly/pkg/vault: [bytes crypto/aes crypto/cipher crypto/hmac crypto/rand crypto/sha256 encoding/binary encoding/json errors fmt io mayfly/pkg/domain os path/filepath runtime sync time]
-
