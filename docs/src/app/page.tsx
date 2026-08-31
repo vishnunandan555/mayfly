@@ -121,7 +121,7 @@ export default function HomePage() {
                 zero-dep 100% Go stdlib
               </span>
               <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 font-mono text-[11px] text-neutral-400">
-                release v1.0.0
+                release v0.0.1
               </span>
               <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 font-mono text-[11px] text-neutral-400">
                 license AGPL-3.0

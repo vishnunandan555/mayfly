@@ -1,47 +1,57 @@
 ---
 title: CLI Commands Overview
-description: Index and syntax reference for all MayFly command-line operations.
+description: Complete index and syntax reference for all MayFly command-line operations.
 icon: Settings
 ---
 
 ## Command Syntax
 
+MayFly provides both the primary binary `mayfly` and the convenient short alias `mf`:
+
 ```bash
-# Direct process execution (recommended)
+# 1. Direct process execution (recommended)
 mf <command> [arguments...]
 mayfly <command> [arguments...]
 
-# Built-in vault management commands
-mf [command] [flags] [arguments...]
-mayfly [command] [flags] [arguments...]
-```
+# 2. Vault and repository management commands
+mf <subcommand> [flags] [arguments...]
+mayfly <subcommand> [flags] [arguments...]
 
-> **Short Alias**: All commands work with `mf` as well as `mayfly`. Commands without a sub-command name automatically execute directly with in-memory secrets injection.
+# 3. Interactive TUI dashboard
+mf
+mf current
+```
 
 ---
 
 ## Command Matrix
 
-| Command | Description | Common Flags |
-| :--- | :--- | :--- |
-| `mf <command>` | Direct process execution with in-memory injection | e.g. `mf npm run dev`, `mf python main.py` |
-| [`mayfly init`](/docs/cli/vault#mayfly-init) | Initialize an encrypted vault for the current directory | `--iterations`, `--force` |
-| [`mayfly run`](/docs/cli/run) | Explicit process execution alias | `--isolated`, `--verbose` |
-| [`mayfly set`](/docs/cli/vault#mayfly-set) | Store or update an environment variable | `--interactive`, `--multiline` |
-| [`mayfly get`](/docs/cli/vault#mayfly-get) | Retrieve the plaintext value of a secret | `--unmask` |
-| [`mayfly list`](/docs/cli/vault#mayfly-list) | List registered keys in the current project vault | `--format=table\|json` |
-| [`mayfly delete`](/docs/cli/vault#mayfly-delete) | Remove an environment variable from the vault | `--all` |
-| [`mayfly scan`](/docs/cli/scan) | Scan workspace for accidentally committed plaintext secrets | `--depth`, `--fix` |
-| [`mayfly audit`](/docs/cli/audit) | Inspect or cryptographically verify the access log | `--verify`, `--limit` |
-| [`mayfly ui`](/docs/cli/vault#mayfly-ui) | Launch the zero-dependency interactive TUI dashboard | `--session` |
+| Command | Shorthand | Description | Primary Flags |
+| :--- | :--- | :--- | :--- |
+| `mf <command>` | `mf npm start` | Spawns target binary with in-memory secrets injection | `--` separator |
+| `mf init` | `mf init` | Initializes an encrypted vault for the current directory inode | `-path <DIR>` |
+| `mf set` | `mf set KEY [VAL]` | Stores or updates an encrypted variable in the project vault | Ephemeral alt-screen |
+| `mf get` | `mf get KEY` | Retrieves decrypted secret value (stdout or clipboard) | `--clip` / `-c` |
+| `mf list` | `mf list` | Lists all registered secret keys for the current project | `--json` |
+| `mf delete` | `mf delete KEY` | Removes a secret key from the encrypted vault | Key name |
+| `mf import` | `mf import [.env]` | Bulk-imports an existing `.env` file directly into vault | Path to `.env` |
+| `mf rotate-password`| `mf rotate-password` | Re-encrypts all project vaults with a new master password | Interactive prompts |
+| `mf run` | `mf run <cmd>` | Explicit alias for direct process execution | `--isolated` |
+| `mf scan` | `mf scan [dir]` | Scans source tree for plaintext secrets and API keys | `--depth`, `--fix` |
+| `mf audit` | `mf audit` | Views chronological access and modification event log | Log history |
+| `mf audit verify` | `mf audit verify` | Cryptographically verifies SHA-256 Merkle hash chain | Integrity check |
+| `mf backup` | `mf backup [file]` | Exports an encrypted snapshot of vault and registered projects | Snapshot file path |
+| `mf restore` | `mf restore <file>` | Restores project keys and vault data from snapshot | Snapshot file path |
+| `mf migrate` | `mf migrate <old> <new>` | Updates project identity when a repository directory moves | Source & target path |
+| `mf uninstall` | `mf uninstall` | Cleanly removes binaries, cleans PATH, and wipes vault | `-u` / `--uninstall` |
+| `mf` | `mf` / `mf current` | Launches zero-dependency full-screen terminal UI dashboard | Project grid |
 
 ---
 
-## Global Flags
+## Global Options
 
-The following flags are accepted across commands:
+The following flags and environment variables are supported across operations:
 
-- `--help`, `-h`: Display command help and usage syntax.
-- `--version`, `-v`: Display MayFly version and build metadata.
-- `--vault-path <path>`: Override the default vault file path (`~/.mayfly/vault.enc`).
-- `--non-interactive`: Disable interactive terminal prompts (fails if password is required and not supplied via environment or session).
+- `-h`, `--help`: Display command usage and syntax.
+- `-v`, `--version`: Output current MayFly binary version and build metadata.
+- `MAYFLY_VAULT_PASSWORD`: Environment variable to provide the master vault password non-interactively in automated headless CI environments (GitHub Actions, GitLab CI, Buildkite).

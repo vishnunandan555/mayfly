@@ -11,7 +11,7 @@
 param (
     [switch]$Uninstall,
     [switch]$Update,
-    [string]$Version = "latest"
+    [string]$Version = "v0.0.1"
 )
 
 $InstallDir = "$HOME\.local\bin"
@@ -81,65 +81,46 @@ if (!(Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 }
 
-$hasGo = (Get-Command go -ErrorAction SilentlyContinue) -ne $null
-$isLocalRepo = (Test-Path ".\go.mod") -and (Test-Path ".\cmd\mayfly")
+$targetBin = "mayfly-windows-$arch.exe"
 
-if ($hasGo -and $isLocalRepo) {
-    Write-Host "`nCompiling reproducible binary from local source repository..."
-    $env:CGO_ENABLED = "0"
-    go build -trimpath -ldflags="-s -w -buildid=" -o "$InstallDir\mayfly.exe" .\cmd\mayfly
-    Write-Host "✓ Built bit-for-bit reproducible binary (0 external network dependencies)" -ForegroundColor Green
+$baseUrl = if ($Version -eq "latest") {
+    "https://github.com/$Repo/releases/latest/download"
 } else {
-    $arch = if ([System.Environment]::Is64BitOperatingSystem) { "amd64" } else { "arm64" }
-    $targetBin = "mayfly-windows-$arch.exe"
-    
-    $baseUrl = if ($Version -eq "latest") {
-        "https://github.com/$Repo/releases/latest/download"
-    } else {
-        "https://github.com/$Repo/releases/download/$Version"
-    }
+    "https://github.com/$Repo/releases/download/$Version"
+}
 
-    $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
-    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+$tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+
+try {
+    Write-Host "`nDownloading $targetBin from GitHub Releases..."
+    $binPath = Join-Path $tempDir $targetBin
+    $checksumPath = Join-Path $tempDir "checksums.txt"
 
     try {
-        Write-Host "`nDownloading $targetBin from GitHub Releases..."
-        $binPath = Join-Path $tempDir $targetBin
-        $checksumPath = Join-Path $tempDir "checksums.txt"
-
         Invoke-WebRequest -Uri "$baseUrl/$targetBin" -OutFile $binPath -UseBasicParsing
         Invoke-WebRequest -Uri "$baseUrl/checksums.txt" -OutFile $checksumPath -UseBasicParsing
-
-        Write-Host "Verifying cryptographic SHA-256 checksum..."
-        $computedHash = (Get-FileHash -Path $binPath -Algorithm SHA256).Hash.ToLower()
-        $expectedLine = Get-Content $checksumPath | Where-Object { $_ -match $targetBin }
-
-        if (-not $expectedLine -or -not ($expectedLine.ToLower().StartsWith($computedHash))) {
-            Write-Host "`n🚨 SECURITY ALERT: Cryptographic checksum verification failed!" -ForegroundColor Red
-            Write-Host "The downloaded binary does not match the published release hash." -ForegroundColor Red
-            Write-Host "Installation aborted to protect your system." -ForegroundColor Red
-            exit 1
-        }
-
-        Write-Host "✓ Cryptographic SHA-256 Checksum Verified: Authentic & Untampered." -ForegroundColor Green
-        Copy-Item -Force $binPath "$InstallDir\mayfly.exe"
     } catch {
-        if ($hasGo) {
-            Write-Host "Pre-built release not reached; building from latest source with Go..." -ForegroundColor Yellow
-            $cloneDir = Join-Path $tempDir "mayfly-src"
-            git clone --depth 1 "https://github.com/$Repo.git" $cloneDir
-            Push-Location $cloneDir
-            $env:CGO_ENABLED = "0"
-            go build -trimpath -ldflags="-s -w -buildid=" -o "$InstallDir\mayfly.exe" .\cmd\mayfly
-            Pop-Location
-            Write-Host "✓ Compiled bit-for-bit reproducible binary from source." -ForegroundColor Green
-        } else {
-            Write-Host "❌ Error: Could not download release binary and Go compiler is not installed." -ForegroundColor Red
-            exit 1
-        }
-    } finally {
-        Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
+        Write-Host "`n❌ Error: Failed to download release binary or checksums from GitHub Releases ($baseUrl)." -ForegroundColor Red
+        Write-Host "Please verify that release '$Version' exists at https://github.com/$Repo/releases" -ForegroundColor Red
+        exit 1
     }
+
+    Write-Host "Verifying cryptographic SHA-256 checksum..."
+    $computedHash = (Get-FileHash -Path $binPath -Algorithm SHA256).Hash.ToLower()
+    $expectedLine = Get-Content $checksumPath | Where-Object { $_ -match $targetBin }
+
+    if (-not $expectedLine -or -not ($expectedLine.ToLower().StartsWith($computedHash))) {
+        Write-Host "`n🚨 SECURITY ALERT: Cryptographic checksum verification failed!" -ForegroundColor Red
+        Write-Host "The downloaded binary does not match the published release hash." -ForegroundColor Red
+        Write-Host "Installation aborted to protect your system." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "✓ Cryptographic SHA-256 Checksum Verified: Authentic & Untampered." -ForegroundColor Green
+    Copy-Item -Force $binPath "$InstallDir\mayfly.exe"
+} finally {
+    Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
 }
 
 switch ($aliasChoice) {

@@ -12,10 +12,14 @@ build:
 	@echo "Built $(BINARY) and $(ALIAS)"
 
 install:
-	@./install.sh
+	@mkdir -p $(HOME)/.local/bin
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -buildid=" -o $(HOME)/.local/bin/mayfly ./cmd/mayfly
+	@ln -sf mayfly $(HOME)/.local/bin/mf 2>/dev/null || cp $(HOME)/.local/bin/mayfly $(HOME)/.local/bin/mf
+	@echo "✓ Compiled and installed to $(HOME)/.local/bin/mayfly and $(HOME)/.local/bin/mf"
 
 uninstall:
-	@./install.sh --uninstall
+	@rm -f $(HOME)/.local/bin/mayfly $(HOME)/.local/bin/mf
+	@echo "✓ Removed $(HOME)/.local/bin/mayfly and $(HOME)/.local/bin/mf"
 
 test:
 	go test -v ./...

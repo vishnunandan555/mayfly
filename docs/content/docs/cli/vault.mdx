@@ -1,90 +1,139 @@
 ---
 title: Vault Management Commands
-description: Reference for initializing, storing, reading, editing, importing, and rotating vault secrets.
+description: Reference for initializing, storing, reading, editing, importing, rotating, backing up, and migrating vault secrets.
 icon: Lock
 ---
 
-## mayfly init
+import { Callout } from 'fumadocs-ui/components/callout';
 
-Initialize an encrypted vault container for the current directory.
+## mf init
+
+Initialize an encrypted vault container and bind it to the current directory inode.
 
 ```bash
-mayfly init [-path DIR]
+mf init [-path DIR]
 ```
 
 ---
 
-## mayfly set
+## mf set
 
 Assign or update an encrypted secret variable in the current project vault.
 
 ```bash
-mayfly set <KEY>
+# Direct assignment
+mf set STRIPE_KEY="sk_live_1234567890"
+
+# Interactive ephemeral alt-screen prompt (recommended)
+mf set STRIPE_KEY
 ```
 
-### Ephemeral Alt-Screen Entry (Recommended)
-
-When run without a value argument in an interactive terminal, MayFly opens a clean, ephemeral alternate terminal screen:
+### Ephemeral Alt-Screen Entry
+When run without a value argument in an interactive terminal, MayFly opens a temporary alternate terminal screen:
 ```
   Enter value for STRIPE_KEY: █
 ```
 - The secret is visible to you for instant visual verification of copy-pastes.
-- Pressing `Enter` immediately closes the screen and saves the secret to the encrypted vault.
-- Zero traces are left in terminal scroll-back or shell history files (`~/.bash_history` / `~/.zsh_history`).
+- Pressing `Enter` immediately closes the alternate screen and saves the secret to the encrypted vault.
+- **Zero traces** are left in terminal scroll-back or shell history files (`~/.bash_history` / `~/.zsh_history`).
 
 ---
 
-## mayfly get
+## mf get
 
 Retrieve the decrypted value of a secret key.
 
 ```bash
-mayfly get <KEY> [--clip]
+mf get <KEY> [--clip]
 ```
 
 ### Flags
-- `--clip` / `-c`: Copy the secret value directly to your system clipboard (using OSC 52, `pbcopy`, `wl-copy`, or `clip`) without printing plaintext to stdout or terminal scroll-back.
+- `--clip` / `-c`: Copy the secret value directly to your system clipboard (using OSC 52, `pbcopy`, `wl-copy`, or Windows `clip`) without printing plaintext to stdout or terminal scroll-back.
 
 ```bash
-mayfly get STRIPE_SECRET_KEY --clip
+mf get STRIPE_SECRET_KEY --clip
 ```
 
 ---
 
-## mayfly list
+## mf list
 
-List secret keys registered for the current project.
+List all secret keys registered for the current project.
 
 ```bash
-mayfly list [--json]
+mf list [--json]
 ```
 
 ### Flags
-- `--json`: Output secrets as structured JSON array for CI scripts and automation.
+- `--json`: Output secrets as a structured JSON array for CI automation and scripting.
 
 ---
 
-## mayfly import
+## mf delete
 
-Bulk-import existing `.env` files directly into your encrypted project vault.
+Remove a secret key from the project vault.
 
 ```bash
-mayfly import [.env]
+mf delete <KEY>
+```
+
+---
+
+## mf import
+
+Bulk-import an existing `.env` file directly into your encrypted project vault.
+
+```bash
+mf import [.env]
 ```
 
 Parses standard `.env` formats (handles comments, `export ` prefixes, single and double quotes) and registers all valid secrets into the vault.
 
 ---
 
-## mayfly rotate-password
+## mf rotate-password
 
-Re-encrypt the entire vault under a new master password with a fresh random salt.
+Re-encrypt the entire vault under a new master password with a fresh 32-byte random cryptographic salt.
 
 ```bash
-mayfly rotate-password
+mf rotate-password
 ```
 
-Prompts for your current master password (with echo suppressed), validates it, and re-encrypts all project credentials in memory before writing to disk.
+Prompts for your current master password (with echo suppressed), validates it, derives a new 256-bit AES key with PBKDF2 (600,000 iterations), and re-encrypts all project credentials in memory before writing to disk.
+
+---
+
+## mf backup & mf restore
+
+Export and restore encrypted vault snapshots across workstations or disaster recovery targets.
+
+```bash
+# Export encrypted snapshot
+mf backup [snapshot.json]
+
+# Restore from snapshot
+mf restore <snapshot.json>
+```
+
+---
+
+## mf migrate
+
+Update project bindings when a repository directory moves or is renamed across filesystems.
+
+```bash
+mf migrate <OLD_PATH> <NEW_PATH>
+```
+
+---
+
+## mf uninstall
+
+Cleanly remove `mayfly` and `mf` binaries, remove PATH exports from shell configuration files, and wipe all local vault data.
+
+```bash
+mf uninstall
+```
 
 ---
 
@@ -100,4 +149,3 @@ mf npm test
 <Callout type="warn" title="Desktop Security Notice">
 Do not store `MAYFLY_VAULT_PASSWORD` permanently in your shell configuration (`~/.bashrc` / `~/.zshrc`). On Unix systems, environment variables can be inspected by other processes owned by the same user via `/proc/<pid>/environ`. Use interactive prompts for local development.
 </Callout>
-

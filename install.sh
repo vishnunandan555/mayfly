@@ -9,7 +9,7 @@ INSTALL_DIR="${HOME}/.local/bin"
 VAULT_DIR="${HOME}/.mayfly"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
 GITHUB_REPO="vishnunandan555/mayfly"
-VERSION="${MAYFLY_VERSION:-v1.0.0}"
+VERSION="${MAYFLY_VERSION:-v0.0.1}"
 
 UNINSTALL=false
 UPDATE=false
@@ -143,88 +143,67 @@ ALIAS_CHOICE="${ALIAS_CHOICE:-1}"
 mkdir -p "${INSTALL_DIR}"
 
 # -------------------------------------------------------------
-# ACQUISITION: SOURCE BUILD OR VERIFIED RELEASE DOWNLOAD
+# ACQUISITION: STRICT CRYPTOGRAPHIC RELEASE VERIFICATION
 # -------------------------------------------------------------
-if [ -n "$SRC_DIR" ] && [ -f "${SRC_DIR}/go.mod" ] && command -v go >/dev/null 2>&1; then
-    echo ""
-    echo "─── [1/3] Local Source Build ────────────────────────────"
-    echo "Detected local source repository at ${SRC_DIR}"
-    echo "Compiling deterministic binary (0 external network dependencies)..."
-    cd "${SRC_DIR}"
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -buildid=" -o "${INSTALL_DIR}/mayfly" ./cmd/mayfly
-    
-    LOCAL_HASH=""
-    if command -v sha256sum >/dev/null 2>&1; then
-        LOCAL_HASH="$(sha256sum "${INSTALL_DIR}/mayfly" | awk '{print $1}')"
-    elif command -v shasum >/dev/null 2>&1; then
-        LOCAL_HASH="$(shasum -a 256 "${INSTALL_DIR}/mayfly" | awk '{print $1}')"
-    fi
-    
-    if [ -n "$LOCAL_HASH" ]; then
-        echo "Binary SHA-256 : ${LOCAL_HASH}"
-    fi
-    echo "✓ Built bit-for-bit reproducible binary from local source."
+TMP_DIR="$(mktemp -d /tmp/mayfly-install.XXXXXX)"
+trap 'rm -rf "${TMP_DIR}"' EXIT
+
+if [ "$VERSION" = "latest" ]; then
+    BASE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download"
 else
-    TMP_DIR="$(mktemp -d /tmp/mayfly-install.XXXXXX)"
-    trap 'rm -rf "${TMP_DIR}"' EXIT
+    BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}"
+fi
 
-    if [ "$VERSION" = "latest" ]; then
-        BASE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download"
-    else
-        BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}"
-    fi
+echo ""
+echo "─── [1/3] Downloading Release Artifacts ─────────────────"
+echo "Fetching ${TARGET_BIN} from ${BASE_URL}..."
 
+if ! curl -fsSL "${BASE_URL}/${TARGET_BIN}" -o "${TMP_DIR}/${TARGET_BIN}" 2>/dev/null; then
     echo ""
-    echo "─── [1/3] Downloading Release Artifacts ─────────────────"
-    echo "Fetching ${TARGET_BIN} from ${BASE_URL}..."
-    
-    DOWNLOAD_SUCCESS=true
-    curl -fsSL "${BASE_URL}/${TARGET_BIN}" -o "${TMP_DIR}/${TARGET_BIN}" 2>/dev/null || DOWNLOAD_SUCCESS=false
-    curl -fsSL "${BASE_URL}/checksums.txt" -o "${TMP_DIR}/checksums.txt" 2>/dev/null || DOWNLOAD_SUCCESS=false
+    echo "❌ Error: Failed to download release binary '${TARGET_BIN}' from GitHub Releases (${BASE_URL})."
+    echo "Please check your network connection or verify that release ${VERSION} is published at:"
+    echo "https://github.com/${GITHUB_REPO}/releases"
+    exit 1
+fi
 
-    if [ "$DOWNLOAD_SUCCESS" = true ]; then
-        echo "✓ Downloaded binary and published checksums.txt"
-        echo ""
-        echo "─── [2/3] Cryptographic SHA-256 Verification ────────────"
-        cd "${TMP_DIR}"
-        
-        EXPECTED_HASH="$(grep "${TARGET_BIN}" checksums.txt 2>/dev/null | awk '{print $1}' || echo "")"
-        COMPUTED_HASH=""
-        
-        if command -v sha256sum >/dev/null 2>&1; then
-            COMPUTED_HASH="$(sha256sum "${TARGET_BIN}" | awk '{print $1}')"
-        elif command -v shasum >/dev/null 2>&1; then
-            COMPUTED_HASH="$(shasum -a 256 "${TARGET_BIN}" | awk '{print $1}')"
-        fi
+if ! curl -fsSL "${BASE_URL}/checksums.txt" -o "${TMP_DIR}/checksums.txt" 2>/dev/null; then
+    echo ""
+    echo "❌ Error: Failed to download official 'checksums.txt' manifest from GitHub Releases."
+    echo "Installation aborted to prevent running unverified binaries."
+    exit 1
+fi
 
-        echo "Published Hash : ${EXPECTED_HASH}"
-        echo "Computed Hash  : ${COMPUTED_HASH}"
+echo "✓ Downloaded binary and published checksums.txt"
+echo ""
+echo "─── [2/3] Cryptographic SHA-256 Verification ────────────"
+cd "${TMP_DIR}"
 
-        if [ -n "$EXPECTED_HASH" ] && [ "$EXPECTED_HASH" = "$COMPUTED_HASH" ]; then
-            echo "Verification   : ✅ 100% BIT-FOR-BIT MATCH (Authentic & Untampered)"
-            mv "${TMP_DIR}/${TARGET_BIN}" "${INSTALL_DIR}/mayfly"
-        else
-            echo "Verification   : ❌ MISMATCH"
-            echo ""
-            echo "🚨 SECURITY ALERT: Cryptographic checksum verification failed!"
-            echo "The downloaded binary does not match the published release hash."
-            echo "Installation aborted to protect your system."
-            exit 1
-        fi
-    else
-        # If pre-built release is unavailable and Go is installed, clone & compile
-        if command -v go >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
-            echo "Release download not reached; falling back to source compilation..."
-            git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" "${TMP_DIR}/mayfly-src"
-            cd "${TMP_DIR}/mayfly-src"
-            CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -buildid=" -o "${INSTALL_DIR}/mayfly" ./cmd/mayfly
-            echo "✓ Compiled bit-for-bit reproducible binary from source with Go."
-        else
-            echo "❌ Error: Could not download release binary and Go compiler is not installed."
-            echo "Please install Go 1.22+ or download from https://github.com/${GITHUB_REPO}/releases"
-            exit 1
-        fi
-    fi
+EXPECTED_HASH="$(grep "${TARGET_BIN}" checksums.txt 2>/dev/null | awk '{print $1}' || echo "")"
+COMPUTED_HASH=""
+
+if command -v sha256sum >/dev/null 2>&1; then
+    COMPUTED_HASH="$(sha256sum "${TARGET_BIN}" | awk '{print $1}')"
+elif command -v shasum >/dev/null 2>&1; then
+    COMPUTED_HASH="$(shasum -a 256 "${TARGET_BIN}" | awk '{print $1}')"
+else
+    echo "❌ Error: Neither 'sha256sum' nor 'shasum' is available on this system."
+    echo "Cannot cryptographically verify binary integrity. Installation aborted."
+    exit 1
+fi
+
+echo "Published Hash : ${EXPECTED_HASH}"
+echo "Computed Hash  : ${COMPUTED_HASH}"
+
+if [ -n "$EXPECTED_HASH" ] && [ "$EXPECTED_HASH" = "$COMPUTED_HASH" ]; then
+    echo "Verification   : ✅ 100% BIT-FOR-BIT MATCH (Authentic & Untampered)"
+    mv "${TMP_DIR}/${TARGET_BIN}" "${INSTALL_DIR}/mayfly"
+else
+    echo "Verification   : ❌ MISMATCH"
+    echo ""
+    echo "🚨 SECURITY ALERT: Cryptographic checksum verification failed!"
+    echo "The downloaded binary does NOT match the published release hash."
+    echo "Installation aborted to protect your system from potential tampering."
+    exit 1
 fi
 
 chmod +x "${INSTALL_DIR}/mayfly"

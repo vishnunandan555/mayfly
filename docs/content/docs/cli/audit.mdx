@@ -7,41 +7,47 @@ icon: FileCheck
 ## Synopsis
 
 ```bash
-mayfly audit [command] [--limit 50] [--verify]
+# View chronological access trail
+mf audit
+
+# Cryptographically verify hash chain continuity
+mf audit verify
 ```
 
 ---
 
-## Subcommands
+## Operations
 
-### `mayfly audit log`
-Display the chronological event history of secret access, injections, and modifications:
+### `mf audit`
+Display the chronological event history of secret access, injections, and vault modifications:
 
 ```bash
-mayfly audit log --limit 20
+mf audit
 ```
 
-### `mayfly audit verify`
-Traverse the entire audit log file (`~/.mayfly/audit.log`) and verify the cryptographic continuity of the SHA-256 hash chain:
+Example output:
+```text
+#12 2026-08-31T05:12:00Z INIT project=my-project secret= hash=f8a29b...
+#13 2026-08-31T05:13:15Z SET  project=my-project secret=STRIPE_KEY hash=b41c0e...
+#14 2026-08-31T05:14:00Z EXEC project=my-project secret=3 secrets hash=a3f9e1...
+```
+
+---
+
+### `mf audit verify`
+Traverse the entire audit log file (`~/.mayfly/audit.log`) and verify the cryptographic continuity of the sequential SHA-256 hash chain:
 
 ```bash
-mayfly audit verify
+mf audit verify
 ```
 
 Output:
-```
-[AUDIT VERIFICATION]
-  Total Events Scanned: 48
-  Genesis Checkpoint:   PASSED
-  Chain Continuity:     PASSED (48/48 blocks valid)
-  Tamper Detection:     CLEAN (No alterations detected)
+```text
+Audit log hash chain verified successfully.
 ```
 
-If any entry was modified or removed out of sequence:
+If any log entry was tampered with, deleted, or altered out of sequence:
 
-```
-[ALERT] INTEGRITY VIOLATION DETECTED AT SEQUENCE #14
-  Expected Previous Hash: 7a356b27...
-  Actual Previous Hash:   9f81a2e3...
-  Status: LOG HAS BEEN COMPROMISED OR ALTERED
+```text
+mayfly: audit log verification FAILED: hash mismatch at entry #14: expected a3f9e1... but found 9f81a2...
 ```

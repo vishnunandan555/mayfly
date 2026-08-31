@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"mayfly/pkg/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -186,7 +187,7 @@ func TestCompleteCLIWorkflow(t *testing.T) {
 
 	// 15. Version flag
 	code, stdout, stderr = executeMayfly(t, []string{"version"}, "", projDir)
-	if code != 0 || !strings.Contains(stdout, "mayfly v1.0.0") {
+	if code != 0 || !strings.Contains(stdout, "mayfly v"+domain.Version) {
 		t.Fatalf("version failed: code=%d, err=%s, out=%s", code, stderr, stdout)
 	}
 }
