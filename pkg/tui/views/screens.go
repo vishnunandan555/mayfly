@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"mayfly/pkg/application"
@@ -25,50 +26,62 @@ const (
 	ModeScan
 	ModeAudit
 	ModeBackup
+	ModeInitProject
+	ModeDeleteProjectConfirm
+	ModeDeleteProjectPassword
 )
 
 type Screens struct {
-	svc          *application.Service
-	mode         ScreenMode
-	prevMode     ScreenMode
-	status       string
-	statusTimer  time.Time
-	currentDir   string
-	selProject   domain.Project
-	secrets      []domain.Secret
-	findings     []domain.ScanFinding
-	auditEvents  []domain.AuditEvent
+	svc             *application.Service
+	mode            ScreenMode
+	prevMode        ScreenMode
+	status          string
+	statusTimer     time.Time
+	currentDir      string
+	selProject      domain.Project
+	secrets         []domain.Secret
+	findings        []domain.ScanFinding
+	auditEvents     []domain.AuditEvent
 
 	// Widgets
-	passInput    *widget.TextInput
-	confirmPass  *widget.TextInput
-	secretName   *widget.TextInput
-	secretValue  *widget.TextInput
-	backupPath   *widget.TextInput
-	projectGrid  *widget.ProjectCardGrid
-	secretsList  *widget.List
-	scanList     *widget.List
-	auditList    *widget.List
-	confirmDlg   *widget.ConfirmDialog
-	editOrigName domain.SecretName
-	revealValue  bool
-	revealTimer  time.Time
+	passInput       *widget.TextInput
+	confirmPass     *widget.TextInput
+	secretName      *widget.TextInput
+	secretValue     *widget.TextInput
+	backupPath      *widget.TextInput
+	customInitPath  *widget.TextInput
+	deletePassInput *widget.TextInput
+	projectGrid     *widget.ProjectCardGrid
+	secretsList     *widget.List
+	scanList        *widget.List
+	auditList       *widget.List
+	confirmDlg      *widget.ConfirmDialog
+	editOrigName    domain.SecretName
+	revealValue     bool
+	revealTimer     time.Time
+
+	// Init & Delete state
+	initChoice      int
+	deleteProjectID string
+	deleteProjName  string
 }
 
 func NewScreens(svc *application.Service, currentDir string) *Screens {
 	s := &Screens{
-		svc:         svc,
-		currentDir:  currentDir,
-		passInput:   widget.NewTextInput("Master Password", "Enter vault password...", true),
-		confirmPass: widget.NewTextInput("Confirm Password", "Re-enter password...", true),
-		secretName:  widget.NewTextInput("Secret Name", "e.g. STRIPE_API_KEY", false),
-		secretValue: widget.NewTextInput("Secret Value", "Enter raw secret value...", true),
-		backupPath:  widget.NewTextInput("Backup File Path", "~/.mayfly/backup.json", false),
-		projectGrid: widget.NewProjectCardGrid("Project Directories"),
-		secretsList: widget.NewList("Project Secrets"),
-		scanList:    widget.NewList("Plaintext Leak Scan"),
-		auditList:   widget.NewList("Audit Log"),
-		confirmDlg:  widget.NewConfirmDialog("Confirm Delete", "Are you sure you want to delete this secret?"),
+		svc:             svc,
+		currentDir:      currentDir,
+		passInput:       widget.NewTextInput("Master Password", "Enter vault password...", true),
+		confirmPass:     widget.NewTextInput("Confirm Password", "Re-enter password...", true),
+		secretName:      widget.NewTextInput("Secret Name", "e.g. STRIPE_API_KEY", false),
+		secretValue:     widget.NewTextInput("Secret Value", "Enter raw secret value...", true),
+		backupPath:      widget.NewTextInput("Backup File Path", "~/.mayfly/backup.json", false),
+		customInitPath:  widget.NewTextInput("Custom Directory Path", "/path/to/project", false),
+		deletePassInput: widget.NewTextInput("Master Password", "Enter master password to delete project...", true),
+		projectGrid:     widget.NewProjectCardGrid("Project Directories"),
+		secretsList:     widget.NewList("Project Secrets"),
+		scanList:        widget.NewList("Plaintext Leak Scan"),
+		auditList:       widget.NewList("Audit Log"),
+		confirmDlg:      widget.NewConfirmDialog("Confirm Delete", "Are you sure you want to delete this secret?"),
 	}
 
 	s.passInput.SetFocused(true)
@@ -269,15 +282,29 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 			switch event.Rune {
 			case 'q', 'Q':
 				return true
-			case 'n', 'N': // Initialize current folder as project
-				proj, err := s.svc.RegisterProject(ctx, s.currentDir)
-				if err != nil {
-					s.SetStatus(fmt.Sprintf("Init error: %v", err))
-				} else {
-					s.selProject = proj
-					s.reloadProjects()
-					s.SetStatus(fmt.Sprintf("Initialized project: %s", proj.CanonicalPath))
+			case 'n', 'N': // Open initialize project dialog
+				s.mode = ModeInitProject
+				s.initChoice = 0
+				s.customInitPath.Clear()
+				s.customInitPath.SetFocused(false)
+				s.SetStatus("Select initialization target: [1] Current Directory or [2] Custom Path")
+				return false
+			case 'd', 'D': // Delete selected project vault
+				selected := s.projectGrid.SelectedCard()
+				if selected == nil {
+					s.SetStatus("Please select a project card first (use arrow keys).")
+					return false
 				}
+				s.deleteProjectID = selected.Project.ID
+				s.deleteProjName = filepath.Base(selected.Project.CanonicalPath)
+				if s.deleteProjName == "/" || s.deleteProjName == "." {
+					s.deleteProjName = selected.Project.CanonicalPath
+				}
+				s.confirmDlg.Title = "Delete Project Vault"
+				s.confirmDlg.Message = fmt.Sprintf("Delete project '%s' and permanently wipe all its encrypted secrets?", s.deleteProjName)
+				s.confirmDlg.Confirm = false
+				s.confirmDlg.Active = true
+				s.mode = ModeDeleteProjectConfirm
 				return false
 			case 's', 'S': // Scanner
 				s.prevMode = s.mode
@@ -461,6 +488,105 @@ func (s *Screens) HandleKey(event terminal.KeyEvent) (shouldQuit bool) {
 			return false
 		}
 		s.backupPath.HandleKey(event)
+
+	case ModeDeleteProjectConfirm:
+		if event.Type == terminal.KeyEscape {
+			s.confirmDlg.Active = false
+			s.mode = ModeGlobalProjects
+			return false
+		}
+		if event.Type == terminal.KeyEnter {
+			if s.confirmDlg.Confirm {
+				s.confirmDlg.Active = false
+				s.deletePassInput.Clear()
+				s.deletePassInput.SetFocused(true)
+				s.mode = ModeDeleteProjectPassword
+				s.SetStatus(fmt.Sprintf("Enter master password to authorize deleting '%s'.", s.deleteProjName))
+				return false
+			}
+			s.confirmDlg.Active = false
+			s.mode = ModeGlobalProjects
+			return false
+		}
+		s.confirmDlg.HandleKey(event)
+
+	case ModeDeleteProjectPassword:
+		if event.Type == terminal.KeyEscape {
+			s.deletePassInput.Clear()
+			s.mode = ModeGlobalProjects
+			return false
+		}
+		if event.Type == terminal.KeyEnter {
+			pass := s.deletePassInput.Value
+			if pass == "" {
+				s.SetStatus("Password cannot be empty.")
+				return false
+			}
+			if err := s.svc.UnlockVault(ctx, []byte(pass)); err != nil {
+				s.SetStatus("Incorrect master password! Deletion aborted.")
+				s.deletePassInput.Clear()
+				s.mode = ModeGlobalProjects
+				return false
+			}
+			if err := s.svc.DeleteProject(ctx, s.deleteProjectID); err != nil {
+				s.SetStatus(fmt.Sprintf("Delete failed: %v", err))
+			} else {
+				s.SetStatus(fmt.Sprintf("✓ Project '%s' and its secrets were deleted.", s.deleteProjName))
+			}
+			s.deletePassInput.Clear()
+			s.deleteProjectID = ""
+			s.mode = ModeGlobalProjects
+			s.reloadProjects()
+			return false
+		}
+		s.deletePassInput.HandleKey(event)
+
+	case ModeInitProject:
+		if event.Type == terminal.KeyEscape {
+			s.customInitPath.Clear()
+			s.mode = ModeGlobalProjects
+			return false
+		}
+		if event.Type == terminal.KeyTab || event.Type == terminal.KeyUp || event.Type == terminal.KeyDown {
+			s.initChoice = 1 - s.initChoice
+			s.customInitPath.SetFocused(s.initChoice == 1)
+			return false
+		}
+		if event.Type == terminal.KeyRune {
+			if event.Rune == '1' && !s.customInitPath.Focused {
+				s.initChoice = 0
+				s.customInitPath.SetFocused(false)
+				return false
+			}
+			if event.Rune == '2' && !s.customInitPath.Focused {
+				s.initChoice = 1
+				s.customInitPath.SetFocused(true)
+				return false
+			}
+		}
+		if event.Type == terminal.KeyEnter {
+			targetDir := s.currentDir
+			if s.initChoice == 1 {
+				targetDir = strings.TrimSpace(s.customInitPath.Value)
+				if targetDir == "" {
+					s.SetStatus("Please enter a valid directory path.")
+					return false
+				}
+			}
+			proj, err := s.svc.RegisterProject(ctx, targetDir)
+			if err != nil {
+				s.SetStatus(fmt.Sprintf("Init error: %v", err))
+			} else {
+				s.SetStatus(fmt.Sprintf("✓ Initialized project: %s", proj.CanonicalPath))
+			}
+			s.customInitPath.Clear()
+			s.mode = ModeGlobalProjects
+			s.reloadProjects()
+			return false
+		}
+		if s.initChoice == 1 {
+			s.customInitPath.HandleKey(event)
+		}
 	}
 
 	return false
@@ -598,19 +724,85 @@ func (s *Screens) Draw(frame *terminal.Frame) {
 		})
 		frame.DrawText(inputRects[0].Min.Row+1, inputRects[0].Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightCyan, Attributes: terminal.AttrBold}, "EXPORT ENCRYPTED VAULT BACKUP")
 		s.backupPath.Draw(frame, inputRects[1])
+
+	case ModeInitProject:
+		s.projectGrid.Draw(frame, bodyRect)
+		dialogWidth := 64
+		if dialogWidth > bounds.Max.Column-bounds.Min.Column-6 {
+			dialogWidth = bounds.Max.Column - bounds.Min.Column - 6
+		}
+		dialogHeight := 13
+		dialogTop := bodyRect.Min.Row + (bodyRect.Max.Row-bodyRect.Min.Row-dialogHeight)/2
+		dialogLeft := bodyRect.Min.Column + (bodyRect.Max.Column-bodyRect.Min.Column-dialogWidth)/2
+		dialogRect := terminal.NewRect(dialogTop, dialogLeft, dialogHeight, dialogWidth)
+
+		frame.DrawBox(dialogRect, terminal.Style{Foreground: terminal.ColorBrightCyan, Attributes: terminal.AttrBold}, "INITIALIZE NEW PROJECT VAULT")
+		frame.DrawText(dialogRect.Min.Row+2, dialogRect.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightWhite}, "Select directory to initialize with MayFly:")
+
+		opt1Style := terminal.Style{Foreground: terminal.ColorBrightWhite}
+		opt1Prefix := "  [1] "
+		if s.initChoice == 0 {
+			opt1Style = terminal.Style{Foreground: terminal.ColorBrightCyan, Attributes: terminal.AttrBold}
+			opt1Prefix = "► [1] "
+		}
+		currDisp := s.currentDir
+		if len(currDisp) > dialogWidth-26 {
+			currDisp = "..." + currDisp[len(currDisp)-(dialogWidth-29):]
+		}
+		frame.DrawText(dialogRect.Min.Row+4, dialogRect.Min.Column+3, opt1Style, fmt.Sprintf("%sCurrent Directory: %s", opt1Prefix, currDisp))
+
+		opt2Style := terminal.Style{Foreground: terminal.ColorBrightWhite}
+		opt2Prefix := "  [2] "
+		if s.initChoice == 1 {
+			opt2Style = terminal.Style{Foreground: terminal.ColorBrightCyan, Attributes: terminal.AttrBold}
+			opt2Prefix = "► [2] "
+		}
+		frame.DrawText(dialogRect.Min.Row+6, dialogRect.Min.Column+3, opt2Style, opt2Prefix+"Custom Directory Path:")
+
+		inputRect := terminal.NewRect(dialogRect.Min.Row+7, dialogRect.Min.Column+7, 3, dialogRect.Max.Column-dialogRect.Min.Column-10)
+		s.customInitPath.Draw(frame, inputRect)
+
+		frame.DrawText(dialogRect.Min.Row+11, dialogRect.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightBlack}, "[Tab/1/2] Select · [Enter] Confirm · [Esc] Cancel")
+
+	case ModeDeleteProjectConfirm:
+		s.projectGrid.Draw(frame, bodyRect)
+		s.confirmDlg.Draw(frame, bodyRect)
+
+	case ModeDeleteProjectPassword:
+		s.projectGrid.Draw(frame, bodyRect)
+		dialogWidth := 58
+		if dialogWidth > bounds.Max.Column-bounds.Min.Column-6 {
+			dialogWidth = bounds.Max.Column - bounds.Min.Column - 6
+		}
+		dialogHeight := 8
+		dialogTop := bodyRect.Min.Row + (bodyRect.Max.Row-bodyRect.Min.Row-dialogHeight)/2
+		dialogLeft := bodyRect.Min.Column + (bodyRect.Max.Column-bodyRect.Min.Column-dialogWidth)/2
+		passBox := terminal.NewRect(dialogTop, dialogLeft, dialogHeight, dialogWidth)
+
+		frame.DrawBox(passBox, terminal.Style{Foreground: terminal.ColorBrightRed, Attributes: terminal.AttrBold}, "CONFIRM PROJECT VAULT DELETION")
+		frame.DrawText(passBox.Min.Row+1, passBox.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightYellow}, fmt.Sprintf("Enter master password to delete '%s':", s.deleteProjName))
+		inputRect := terminal.NewRect(passBox.Min.Row+3, passBox.Min.Column+3, 3, passBox.Max.Column-passBox.Min.Column-6)
+		s.deletePassInput.Draw(frame, inputRect)
+		frame.DrawText(passBox.Min.Row+6, passBox.Min.Column+3, terminal.Style{Foreground: terminal.ColorBrightBlack}, "[Enter] Confirm Delete · [Esc] Cancel")
 	}
 
 	// Draw Footer with context-sensitive key shortcuts
 	footerText := ""
 	switch s.mode {
 	case ModeGlobalProjects:
-		footerText = " [Enter] Open  [N] Init Dir  [S] Scan  [A] Audit  [B] Backup  [Q/Esc] Exit "
+		footerText = " [Enter] Open  [N] Init Project  [D] Delete Project  [S] Scan  [A] Audit  [B] Backup  [Q/Esc] Exit "
 	case ModeProjectSecrets:
 		footerText = " [C] Copy  [V] Reveal  [Enter] Edit  [N] Add  [D] Del  [S] Scan  [A] Audit  [Esc] Back "
 	case ModeFirstRunSetup, ModeEditSecret:
 		footerText = " [Tab] Switch Field  [Enter] Save  [Esc] Cancel "
 	case ModeUnlock:
 		footerText = " [Enter] Unlock  [Esc] Exit "
+	case ModeInitProject:
+		footerText = " [1/2 or Tab] Toggle Option  [Enter] Confirm Init  [Esc] Cancel "
+	case ModeDeleteProjectConfirm:
+		footerText = " [Tab/Left/Right] Select  [Enter] Confirm  [Esc] Cancel "
+	case ModeDeleteProjectPassword:
+		footerText = " [Enter] Authorize Delete  [Esc] Cancel "
 	case ModeScan, ModeAudit, ModeBackup:
 		footerText = " [Esc] Return to Dashboard "
 	default:

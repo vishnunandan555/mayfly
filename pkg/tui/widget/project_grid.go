@@ -30,11 +30,17 @@ func NewProjectCardGrid(title string) *ProjectCardGrid {
 
 func (g *ProjectCardGrid) SetCards(cards []ProjectCard) {
 	g.Cards = cards
-	if g.Selected >= len(cards) {
-		g.Selected = len(cards) - 1
+	currentIdx := -1
+	for i, c := range cards {
+		if c.IsCurrent {
+			currentIdx = i
+			break
+		}
 	}
-	if g.Selected < 0 && len(cards) > 0 {
-		g.Selected = 0
+	if currentIdx != -1 {
+		g.Selected = currentIdx
+	} else {
+		g.Selected = -1
 	}
 }
 
@@ -51,6 +57,15 @@ func (g *ProjectCardGrid) HandleKey(event terminal.KeyEvent) bool {
 	}
 
 	cols := 2 // 2-column grid layout
+
+	if g.Selected < 0 {
+		switch event.Type {
+		case terminal.KeyLeft, terminal.KeyRight, terminal.KeyUp, terminal.KeyDown, terminal.KeyHome, terminal.KeyEnd:
+			g.Selected = 0
+			return true
+		}
+		return false
+	}
 
 	switch event.Type {
 	case terminal.KeyLeft:
