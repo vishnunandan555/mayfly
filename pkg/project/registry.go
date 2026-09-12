@@ -166,19 +166,32 @@ func (r *Registry) Register(dirPath string) (domain.Project, error) {
 	}
 
 	now := time.Now().UTC()
-	if existing, found := projects[identity.ID]; found {
-		// Update path and timestamp
-		existing.CanonicalPath = identity.CanonicalPath
-		existing.UpdatedAt = now
-		projects[identity.ID] = existing
-		if err := r.saveLocked(projects); err != nil {
+	if identity.ID != "" {
+		if existing, found := projects[identity.ID]; found {
+			// Update path and timestamp
+			existing.CanonicalPath = identity.CanonicalPath
+			existing.UpdatedAt = now
+			projects[identity.ID] = existing
+			if err := r.saveLocked(projects); err != nil {
+				return domain.Project{}, err
+			}
+			return existing, nil
+		}
+	}
+
+	projectID := identity.ID
+	if projectID == "" {
+		projectID, err = newProjectID()
+		if err != nil {
 			return domain.Project{}, err
 		}
-		return existing, nil
+	}
+	if err := ensureProjectID(identity, projectID); err != nil {
+		return domain.Project{}, err
 	}
 
 	project := domain.Project{
-		ID:            identity.ID,
+		ID:            projectID,
 		CanonicalPath: identity.CanonicalPath,
 		Device:        identity.Device,
 		Inode:         identity.Inode,
@@ -186,7 +199,7 @@ func (r *Registry) Register(dirPath string) (domain.Project, error) {
 		UpdatedAt:     now,
 	}
 
-	projects[identity.ID] = project
+	projects[projectID] = project
 	if err := r.saveLocked(projects); err != nil {
 		return domain.Project{}, err
 	}
@@ -209,14 +222,10 @@ func (r *Registry) Resolve(dirPath string) (domain.Project, error) {
 		return domain.Project{}, err
 	}
 
-	// 1. Direct match by ID
-	if proj, found := projects[identity.ID]; found {
-		return proj, nil
-	}
-
-	// 2. Match by canonical path
-	for _, proj := range projects {
-		if proj.CanonicalPath == identity.CanonicalPath {
+	// A persistent marker is the only automatic identity match. Filesystem
+	// metadata is deliberately not used because inodes can be recycled.
+	if identity.ID != "" {
+		if proj, found := projects[identity.ID]; found {
 			return proj, nil
 		}
 	}
@@ -336,8 +345,20 @@ func (r *Registry) MigrateProject(oldDirPath, newDirPath string) (domain.Project
 	}
 
 	now := time.Now().UTC()
+	newID := newIdentity.ID
+	if newID == "" {
+		newID = oldProj.ID
+	} else if newID != oldProj.ID {
+		if _, exists := projects[newID]; exists {
+			return domain.Project{}, domain.Project{}, ErrProjectAlreadyExists
+		}
+	}
+	if err := ensureProjectID(newIdentity, newID); err != nil {
+		return domain.Project{}, domain.Project{}, err
+	}
+
 	newProj := domain.Project{
-		ID:            newIdentity.ID,
+		ID:            newID,
 		CanonicalPath: newIdentity.CanonicalPath,
 		Device:        newIdentity.Device,
 		Inode:         newIdentity.Inode,
@@ -346,7 +367,7 @@ func (r *Registry) MigrateProject(oldDirPath, newDirPath string) (domain.Project
 	}
 
 	delete(projects, oldID)
-	projects[newIdentity.ID] = newProj
+	projects[newID] = newProj
 
 	if err := r.saveLocked(projects); err != nil {
 		return domain.Project{}, domain.Project{}, err
