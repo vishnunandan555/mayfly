@@ -18,11 +18,15 @@ func InspectDirectory(path string) (Identity, error) {
 	if err != nil {
 		return Identity{}, err
 	}
+	id, err := readProjectID(canonical)
+	if err != nil {
+		return Identity{}, err
+	}
 
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok || stat == nil {
 		return Identity{
-			ID:            GenerateID(0, 0, canonical),
+			ID:            id,
 			CanonicalPath: canonical,
 		}, nil
 	}
@@ -31,7 +35,7 @@ func InspectDirectory(path string) (Identity, error) {
 	ino := uint64(stat.Ino)
 
 	return Identity{
-		ID:            GenerateID(dev, ino, canonical),
+		ID:            id,
 		CanonicalPath: canonical,
 		Device:        dev,
 		Inode:         ino,

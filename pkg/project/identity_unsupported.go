@@ -8,9 +8,13 @@ func InspectDirectory(path string) (Identity, error) {
 	if err != nil {
 		return Identity{}, err
 	}
+	id, err := readProjectID(canonical)
+	if err != nil {
+		return Identity{}, err
+	}
 
 	return Identity{
-		ID:            GenerateID(0, 0, canonical),
+		ID:            id,
 		CanonicalPath: canonical,
 	}, nil
 }

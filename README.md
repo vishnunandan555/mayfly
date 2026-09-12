@@ -287,7 +287,7 @@ Explore the full interactive documentation, security architecture, and language 
 | **Password Echo Suppression** | Master password prompts use low-level `termios` (`TCSETS`/`ECHO` disabled) so keystrokes never appear on screen. |
 | **Ephemeral Alt-Screen Input** | `mf set` prompts in an ephemeral alternate screen buffer; secrets are visible for verification but vanish completely upon saving. |
 | **Memory Isolation & Auto-Lock** | Decrypted values reside only in RAM during process execution. Memory buffers are zeroed with `runtime.KeepAlive`. Vault auto-locks after 15 min idle. |
-| **Filesystem Isolation** | Binds project identity to physical storage `(Device, Inode)` to prevent path collision leaks. |
+| **Filesystem Isolation** | Stores a persistent project identity marker to prevent path collision leaks and preserve identity across moves. |
 | **Audit Integrity** | SHA-256 hash-chained log (`~/.mayfly/audit.log`) mathematically proves no log entries were altered or deleted. |
 | **Distribution Integrity** | Release binaries are deterministically compiled and cryptographically verified against published SHA-256 checksums in `install.sh`/`install.ps1`. |
 

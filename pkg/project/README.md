@@ -21,7 +21,7 @@
 ## 🧭 Architectural Features
 
 1. **Canonical Symlink Resolution:** Normalizes complex symlinks and relative path variations (`./`, `../`, symlinked directories) into unambiguous absolute canonical paths using `filepath.EvalSymlinks` and `filepath.Abs`.
-2. **Deterministic & Random UUIDv4 Engine:** Custom RFC 4122 compliant UUIDv4 generator powered strictly by Go's `crypto/rand`, ensuring unguessable project identifiers without third-party libraries.
+2. **Persistent Project Identity:** Registration writes a random identity marker (`.mayfly-project-id`) inside the project directory. Resolution uses that marker rather than raw device/inode values, so inode recycling cannot inherit a vault and moves preserve identity.
 3. **Thread-Safe Atomic Registry:** Protects registry mutations with `sync.RWMutex` and atomic file write patterns (`temp file → fsync → rename`).
 
 ---

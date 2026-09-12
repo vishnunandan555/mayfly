@@ -62,7 +62,7 @@ MayFly re-architects developer secret management from the ground up. By replacin
 | :--- | :--- | :--- |
 | **Volatile RAM Injection** | Secrets decrypted strictly in process RAM | Zero plaintext `.env` files written to disk |
 | **AEAD Vault Storage** | AES-256-GCM + RFC 8018 PBKDF2 (600,000 rounds) | GPU brute-force resistant encrypted store |
-| **Physical Inode Binding** | Projects identified by storage `(Device, Inode)` | Immune to path tampering and symlink attacks |
+| **Persistent Project Binding** | Projects identified by a random marker stored in the directory | Safe against inode recycling and resilient to moves |
 | **Pure Go TUI Engine** | Custom double-buffered 2D character canvas | Rich project grid & secret drilldown with 0 deps |
 | **Leak Scanner** | 15+ regex signatures + dangerous file detection | Catches unencrypted tokens before git commit |
 | **Audit Hash Chain** | SHA-256 linked event blockchain | Mathematically provable tamper detection |
@@ -140,7 +140,7 @@ MayFly anchors secrets to the physical filesystem geometry rather than volatile 
 └───────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Physical Device & Inode Binding**: Uses `(Device, Inode)` on Linux/Darwin and `FileIndex` on Windows (`GetFileInformationByHandle`) to bind secrets to physical storage.
+- **Persistent Project Identity**: Stores a random `.mayfly-project-id` marker in the registered directory. The marker survives copy-delete moves across filesystems, while a replacement directory at the old path receives a new identity.
 - **Symlink & Alias Immunity**: Resolves canonical paths through `filepath.EvalSymlinks` to protect against symlink-based privilege escalation or path hijacking.
 - **Path Collision Protection**: Even if two folders share the same name or relative location, their cryptographic identity remains strictly isolated.
 - **Project Directory Migration**: `mf migrate <OLD_PATH> <NEW_PATH>` gracefully updates hardware bindings when a project repository is moved across disks or parent directories.
