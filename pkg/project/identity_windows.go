@@ -3,7 +3,6 @@
 package project
 
 import (
-	"strings"
 	"syscall"
 )
 
@@ -14,8 +13,6 @@ func InspectDirectory(path string) (Identity, error) {
 		return Identity{}, err
 	}
 
-	// Normalize windows path (lowercase for case-insensitive Windows filesystems)
-	normalized := strings.ToLower(canonical)
 	id, err := readProjectID(canonical)
 	if err != nil {
 		return Identity{}, err
